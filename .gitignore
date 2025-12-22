@@ -13,7 +13,6 @@
 *.db-wal
 *.log
 *.suo
-*.exe
 *.dll
 *.lib
 *.exp
