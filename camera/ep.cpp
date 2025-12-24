@@ -106,7 +106,7 @@ class WCDlg : public ZDlg, CUILayot, CIcons
 
 	void EnableCtrls(HWND hwndDlg, BOOL bEnable)
 	{
-		static const UINT _s_ids[] = { IDCANCEL, IDOK, ID_FPS, ID_FORMAT, ID_CAMERA };
+		static const UINT _s_ids[] = { IDABORT, IDOK, ID_FPS, ID_FORMAT, ID_CAMERA };
 		ULONG n = _countof(_s_ids);
 		do 
 		{
@@ -157,10 +157,6 @@ INT_PTR WCDlg::DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 		_hfont = CreateFont();
 		break;
 
-	case WM_CLOSE:
-		EndDialog(hwndDlg, 0);
-		return 0;
-
 	case WM_TIMER:
 		switch (wParam)
 		{
@@ -173,13 +169,17 @@ INT_PTR WCDlg::DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 	case WM_COMMAND:
 		switch (wParam)
 		{
-		case IDCANCEL:
+		case IDABORT:
 			if (Stop())
 			{
 				KillTimer(hwndDlg, stat_timer);
 				EnableCtrls(hwndDlg, TRUE);
 				SetDlgItemTextW(hwndDlg, IDC_STATIC1, 0);
 			}
+			break;
+
+		case IDCANCEL:
+			EndDialog(hwndDlg, 0);
 			break;
 
 		case MAKEWPARAM(ID_CAMERA, CBN_SELCHANGE):

@@ -20,8 +20,8 @@ void KsRead::OnReadComplete(KS_HEADER_AND_INFO* SHGetImage)
 	PVOID Frame = SHGetImage->Data;
 	InterlockedExchangeAddSizeTNoFence(&_Bytes, DataUsed);
 
-	DbgPrint("ReadComplete(Frame<%x> %x(%I64x) [%I64x])\r\n", GetFrameNumber(Frame), 
-		DataUsed, _Bytes, SHGetImage->FrameCompletionNumber);
+	DbgPrint("ReadComplete(Frame<%x> %x(%I64x) [%I64x] %x)\r\n", GetFrameNumber(Frame), 
+		DataUsed, _Bytes, SHGetImage->FrameCompletionNumber, SHGetImage->OptionsFlags);
 
 	Read();
 
@@ -103,9 +103,8 @@ void KsRead::Read(PVOID Data)
 		SHGetImage->Size = sizeof (KS_HEADER_AND_INFO);
 		SHGetImage->FrameExtent = biSizeImage;
 		SHGetImage->Data = Data;
-
-		SHGetImage->FrameCompletionNumber = InterlockedIncrement(&_PictureNumber);
-
+		SHGetImage->OptionsFlags = KSSTREAM_HEADER_OPTIONSF_FRAMEINFO;
+	
 		NTSTATUS status = STATUS_INVALID_HANDLE;
 
 		HANDLE PinHandle;

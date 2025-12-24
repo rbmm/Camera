@@ -4,10 +4,6 @@
 
 struct KS_HEADER_AND_INFO : public KSSTREAM_HEADER, public KS_FRAME_INFO {};
 
-#ifdef _WIN64
-C_ASSERT(0x80==sizeof(KS_HEADER_AND_INFO));
-#endif
-
 class KsRead : public IO_OBJECT, KS_BITMAPINFOHEADER
 {
 	SLIST_HEADER _head;
@@ -19,7 +15,6 @@ class KsRead : public IO_OBJECT, KS_BITMAPINFOHEADER
 	ULONG64 _ReadTime = 0;
 	PVOID _FrameData = 0;
 	LONG _nReadCount = 0;
-	LONG _PictureNumber = 0;
 
 	enum { op_read = 'daer' };
 
