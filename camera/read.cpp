@@ -28,7 +28,7 @@ void KsRead::OnReadComplete(KS_HEADER_AND_INFO* SHGetImage)
 	switch (biCompression)
 	{
 	case '2YUY':
-		YUY2toRGBA((PBYTE)Frame, (PBYTE)_vid->GetBits(), biWidth, biHeight);
+		YUY2toRGBA((PBYTE)Frame, (PULONG)_vid->GetBits(), biWidth, biHeight);
 		PostMessageW(_hwnd, VBmp::e_update, 0, 0);
 		break;
 	default:
@@ -103,7 +103,7 @@ void KsRead::Read(PVOID Data)
 		SHGetImage->Size = sizeof (KS_HEADER_AND_INFO);
 		SHGetImage->FrameExtent = biSizeImage;
 		SHGetImage->Data = Data;
-		SHGetImage->OptionsFlags = KSSTREAM_HEADER_OPTIONSF_FRAMEINFO;
+		SHGetImage->OptionsFlags = KSSTREAM_HEADER_OPTIONSF_FRAMEINFO|KSSTREAM_HEADER_OPTIONSF_PERSIST_SAMPLE;
 	
 		NTSTATUS status = STATUS_INVALID_HANDLE;
 

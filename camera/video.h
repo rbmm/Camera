@@ -79,4 +79,4 @@ public:
 	}
 };
 
-void YUY2toRGBA(PBYTE ptrIn, PBYTE ptrOut, ULONG cx, ULONG cy);
+void YUY2toRGBA(PBYTE ptrIn, PULONG prgba, ULONG cx, ULONG cy);

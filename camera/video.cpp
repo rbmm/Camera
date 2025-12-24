@@ -38,9 +38,17 @@ BYTE Clamp(int val) {
 	return (BYTE)val;
 }
 
-void YUY2toRGBA(PBYTE ptrIn, PBYTE ptrOut, ULONG cx, ULONG cy)
+void YUY2toRGBA(PBYTE ptrIn, PULONG prgba, ULONG cx, ULONG cy)
 {
 	cx >>= 1;
+
+	union {
+		ULONG rgba = 0;
+		struct {
+			UCHAR R, G, B, A;
+		};
+	};
+
 	do 
 	{
 		ULONG s = cx;
@@ -55,16 +63,20 @@ void YUY2toRGBA(PBYTE ptrIn, PBYTE ptrOut, ULONG cx, ULONG cy)
 			LONG b = 128 - 100 * u0 - 208 * v0;
 			LONG c = 409 * v0 + 128;
 
-			*ptrOut++ = Clamp(( y0 + a) >> 8); // blue
-			*ptrOut++ = Clamp(( y0 + b) >> 8); // green
-			*ptrOut++ = Clamp(( y0 + c) >> 8); // red
-			*ptrOut++ = 0;
-			*ptrOut++ = Clamp(( y1 + a) >> 8); // blue
-			*ptrOut++ = Clamp(( y1 + b) >> 8); // green
-			*ptrOut++ = Clamp(( y1 + c) >> 8); // red
-			*ptrOut++ = 0;
+			R = Clamp(( y0 + a) >> 8);
+			G = Clamp(( y0 + b) >> 8);
+			B = Clamp(( y0 + c) >> 8);
+
+			*prgba++ = rgba;
+
+			R = Clamp(( y1 + a) >> 8);
+			G = Clamp(( y1 + b) >> 8);
+			B = Clamp(( y1 + c) >> 8);
+
+			*prgba++ = rgba;
 
 		} while (--s);
+
 	} while (--cy);
 }
 
