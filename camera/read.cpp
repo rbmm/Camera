@@ -241,6 +241,8 @@ NTSTATUS KsRead::Create(_In_ HANDLE FilterHandle, _In_ PKS_DATARANGE_VIDEO pDRVi
 				Assign(hFile);
 				return STATUS_SUCCESS;
 			}
+
+			NtClose(hFile);
 		}
 
 		return status;
