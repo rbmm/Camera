@@ -202,7 +202,7 @@ INT_PTR WCDlg::DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 					SendMessage(hwnd, WM_SETFONT, (WPARAM)_hfont, 0);
 				}
 				_G_log >> hwnd;
-				_G_log.Init(0x10000);
+				_G_log.Init(0x100000);
 				ShowWindow(hwnd, SW_SHOWNORMAL);
 			}
 			break;
@@ -263,6 +263,9 @@ void WCDlg::OnOk(HWND hwndDlg)
 
 		if (0 <= status)
 		{
+			KSSTATE state;
+			pin->GetState(&state);
+
 			if (0 <= (status = pin->SetState(KSSTATE_RUN)))
 			{
 				EnableCtrls(hwndDlg, FALSE);
@@ -432,15 +435,10 @@ NTSTATUS ProcessP(HANDLE hFile, KSMULTIPLE_ITEM_LIST** pfirst)
 
 		DumpGuid(&guidCategory, "PIN_CATEGORY=");
 
-		if (PINNAME_VIDEO_CAPTURE != guidCategory)
+		if (PINNAME_VIDEO_CAPTURE != guidCategory && PINNAME_VIDEO_PREVIEW != guidCategory)
 		{
 			continue;
 		}
-
-		// use the KSPROPERTY_PIN_DATARANGES property to determine the data ranges supported by pins instantiated by the pin factory
-		// out: A KSMULTIPLE_ITEM structure, followed by a sequence of 64-bit aligned KSDATARANGE structures.
-
-		KsProperty.Property.Id = KSPROPERTY_PIN_DATARANGES;
 
 		union {
 			PVOID buf;
@@ -453,6 +451,17 @@ NTSTATUS ProcessP(HANDLE hFile, KSMULTIPLE_ITEM_LIST** pfirst)
 
 		if (buf = HeapAlloc(hHeap, 0, cb_buf))
 		{
+			//KsProperty.Property.Set = KSPROPERTYSETID_ExtendedCameraControl;
+			//KsProperty.Property.Id = KSPROPERTY_CAMERACONTROL_EXTENDED_FACEAUTH_MODE;
+			////KSCAMERA_EXTENDEDPROP_HEADER;
+			//status = SynchronousDeviceControl(hFile, IOCTL_KS_PROPERTY, 
+			//	&KsProperty, sizeof(KSP_PIN), buf, cb_buf, &BytesReturned);
+			//KsProperty.Property.Set = KSPROPSETID_Pin;
+
+			// use the KSPROPERTY_PIN_DATARANGES property to determine the data ranges supported by pins instantiated by the pin factory
+			// out: A KSMULTIPLE_ITEM structure, followed by a sequence of 64-bit aligned KSDATARANGE structures.
+			KsProperty.Property.Id = KSPROPERTY_PIN_DATARANGES;
+
 			status = SynchronousDeviceControl(hFile, IOCTL_KS_PROPERTY, 
 				&KsProperty, sizeof(KSP_PIN), &pList->ksmi, cb_buf - FIELD_OFFSET(KSMULTIPLE_ITEM_LIST, ksmi), &BytesReturned);
 
@@ -703,7 +712,7 @@ void CALLBACK ep(void*)
 	{
 		if (0 <= CoInitializeEx(0, COINIT_APARTMENTTHREADED|COINIT_DISABLE_OLE1DDE))
 		{
-			_G_log.Init(0x10000);
+			_G_log.Init(0x100000);
 			WCDlg dlg;
 			dlg.DoModal((HINSTANCE)&__ImageBase, MAKEINTRESOURCEW(IDD_DIALOG1), 0, 0);
 			CoUninitialize();

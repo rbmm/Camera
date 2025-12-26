@@ -181,7 +181,7 @@ NTSTATUS KsRead::SetState(KSSTATE state)
 NTSTATUS KsRead::GetState(PKSSTATE state)
 {
 	KSPROPERTY KsProperty = { KSPROPSETID_Connection, KSPROPERTY_CONNECTION_STATE, KSPROPERTY_TYPE_GET };
-
+	
 	NTSTATUS status = STATUS_INVALID_HANDLE;
 
 	HANDLE PinHandle;
@@ -203,6 +203,8 @@ NTSTATUS KsRead::GetState(PKSSTATE state)
 	return status;
 }
 
+#define IOCTL_KS_CUSTOM CTL_CODE(FILE_DEVICE_KS, 0x833, METHOD_OUT_DIRECT, FILE_READ_ACCESS)
+
 NTSTATUS KsRead::Create(_In_ HANDLE FilterHandle, _In_ PKS_DATARANGE_VIDEO pDRVideo)
 {
 	ULONG SampleSize = pDRVideo->DataRange.SampleSize;
@@ -217,29 +219,40 @@ NTSTATUS KsRead::Create(_In_ HANDLE FilterHandle, _In_ PKS_DATARANGE_VIDEO pDRVi
 
 	SampleSize = ((SampleSize + __alignof(SLIST_ENTRY) - 1) & ~(__alignof(SLIST_ENTRY) - 1));
 
-	if (Data = VirtualAlloc(0, SampleSize << 4, MEM_COMMIT, PAGE_READWRITE))
+	ULONG SamplesBufferSize = SampleSize << 4;
+
+	if (Data = VirtualAlloc(0, SamplesBufferSize, MEM_COMMIT, PAGE_READWRITE))
 	{
 		_FrameData = Data;
-
-		PSLIST_HEADER head = &_head;
-		ULONG n = 1 << 4;
-		do 
-		{
-			InterlockedPushEntrySList(head, entry);
-			pb += SampleSize;
-		} while (--n);
 
 		HANDLE hFile;
 		NTSTATUS status = CreatePin(FilterHandle, pDRVideo, GENERIC_READ, &hFile);
 
 		if (0 <= status)
 		{
-			if (0 <= (status = NT_IRP::BindIoCompletion(this, hFile)))
-			{
-				*static_cast<PKS_BITMAPINFOHEADER>(this) = pDRVideo->VideoInfoHeader.bmiHeader;
+			*static_cast<PKS_BITMAPINFOHEADER>(this) = pDRVideo->VideoInfoHeader.bmiHeader;
 
-				Assign(hFile);
-				return STATUS_SUCCESS;
+			memcpy(Data, pDRVideo, sizeof(KS_DATARANGE_VIDEO));
+			ULONG cb;
+			switch (status = SynchronousDeviceControl(hFile, IOCTL_KS_CUSTOM, 0, 0, Data, SamplesBufferSize, &cb))
+			{
+			case STATUS_INVALID_DEVICE_REQUEST:
+			case STATUS_PORT_ALREADY_SET:
+			case STATUS_SUCCESS:
+				if (0 <= (status = NT_IRP::BindIoCompletion(this, hFile)))
+				{
+					PSLIST_HEADER head = &_head;
+					ULONG n = 1 << 4;
+					do 
+					{
+						InterlockedPushEntrySList(head, entry);
+						pb += SampleSize;
+					} while (--n);
+
+					Assign(hFile);
+					return STATUS_SUCCESS;
+				}
+				break;
 			}
 
 			NtClose(hFile);

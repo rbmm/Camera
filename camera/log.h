@@ -3,16 +3,16 @@
 class WLog
 {
 	PVOID _BaseAddress;
-	ULONG _RegionSize, _Ptr;
+	ULONG _MaxPtr, _Ptr;
 
 	PWSTR _buf()
 	{
-		return (PWSTR)((PBYTE)_BaseAddress + _Ptr);
+		return (PWSTR)_BaseAddress + _Ptr;
 	}
 
 	ULONG _cch()
 	{
-		return (_RegionSize - _Ptr) / sizeof(WCHAR);
+		return _MaxPtr - _Ptr;
 	}
 	SRWLOCK _lock = {};
 

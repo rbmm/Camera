@@ -22,7 +22,7 @@ ULONG WLog::Init(SIZE_T RegionSize)
 	if (_BaseAddress = LocalAlloc(0, RegionSize))
 	{
 		*(WCHAR*)_BaseAddress = 0;
-		_RegionSize = (ULONG)RegionSize, _Ptr = 0;
+		_MaxPtr = (ULONG)RegionSize / sizeof(WCHAR), _Ptr = 0;
 		return NOERROR;
 	}
 	return GetLastError();
@@ -39,7 +39,7 @@ WLog& WLog::operator ()(PCWSTR format, ...)
 
 	if (0 < len)
 	{
-		_Ptr += len * sizeof(WCHAR);
+		_Ptr += len;
 	}
 
 	ReleaseSRWLockExclusive(&_lock);
