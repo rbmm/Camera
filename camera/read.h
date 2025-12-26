@@ -45,7 +45,8 @@ public:
 
 	NTSTATUS GetState(PKSSTATE state);
 
-	NTSTATUS Create(_In_ HANDLE FilterHandle, _In_ PKS_DATARANGE_VIDEO pDRVideo);
+	enum MODE { e_primary, e_secondary, e_exclusive };
+	NTSTATUS Create(_In_ HANDLE FilterHandle, _In_ PKS_DATARANGE_VIDEO pDRVideo, _Out_ MODE* mode);
 
 	void Start();
 

@@ -8,53 +8,7 @@ _NT_BEGIN
 
 #include "utils.h"
 #include "video.h"
-
-NTSTATUS ReadFromFile(_In_ PCWSTR lpFileName, 
-					  _Out_ PBYTE* ppb, 
-					  _Out_ ULONG* pcb, 
-					  _In_opt_ ULONG cbBefore = 0, 
-					  _In_opt_ ULONG cbAfter = 0)
-{
-	UNICODE_STRING ObjectName;
-	NTSTATUS status = RtlDosPathNameToNtPathName_U_WithStatus(lpFileName, &ObjectName, 0, 0);
-	HANDLE hFile;
-
-	if (0 <= status)
-	{
-		OBJECT_ATTRIBUTES oa = { sizeof(oa), 0, &ObjectName, OBJ_CASE_INSENSITIVE };
-		IO_STATUS_BLOCK iosb;
-		status = NtOpenFile(&hFile, FILE_GENERIC_READ, &oa, &iosb, FILE_SHARE_READ, FILE_SYNCHRONOUS_IO_NONALERT);
-		RtlFreeUnicodeString(&ObjectName);
-
-		if (0 <= status)
-		{
-			FILE_STANDARD_INFORMATION fsi;
-			if (0 <= (status = NtQueryInformationFile(hFile, &iosb, &fsi, sizeof(fsi), FileStandardInformation)))
-			{
-				if (PBYTE pb = new BYTE[cbBefore + fsi.EndOfFile.LowPart + cbAfter])
-				{
-					if (0 > (status = NtReadFile(hFile, 0, 0, 0, &iosb, pb + cbBefore, fsi.EndOfFile.LowPart, 0, 0)))
-					{
-						delete [] pb;
-					}
-					else
-					{
-						*ppb = pb;
-						*pcb = (ULONG)iosb.Information;
-					}
-				}
-				else
-				{
-					status = STATUS_NO_MEMORY;
-				}
-			}
-
-			NtClose(hFile);
-		}
-	}
-
-	return status;
-}
+#include "log.h"
 
 class YCameraWnd : public ZWnd
 {
@@ -66,7 +20,7 @@ class YCameraWnd : public ZWnd
 
 	HRESULT ConvertImage(IWICBitmapSource* pIBitmap);
 	HRESULT ConvertImage(IWICBitmapDecoder *pIDecoder);
-	void ConvertImage(ULONG cb);
+	HRESULT ConvertImage(ULONG cb);
 
 	virtual LRESULT WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
@@ -226,23 +180,25 @@ HRESULT YCameraWnd::ConvertImage(IWICBitmapDecoder *pIDecoder)
 	return hr;
 }
 
-void YCameraWnd::ConvertImage(ULONG cb)
+HRESULT YCameraWnd::ConvertImage(ULONG cb)
 {
+	HRESULT hr = E_UNEXPECTED;
+
 	if (IWICImagingFactory *piFactory = _piFactory)
 	{
 		if (WICInProcPointer pb = (WICInProcPointer)_vid->GetBuf())
 		{
 			IWICStream *pIWICStream;
 
-			if (0 <= piFactory->CreateStream(&pIWICStream))
+			if (0 <= (hr = piFactory->CreateStream(&pIWICStream)))
 			{
-				if (0 <= pIWICStream->InitializeFromMemory(pb, cb))
+				if (0 <= (hr = pIWICStream->InitializeFromMemory(pb, cb)))
 				{
 					IWICBitmapDecoder *pIDecoder;
-					if (0 <= piFactory->CreateDecoderFromStream(pIWICStream, 0, 
-						WICDecodeMetadataCacheOnDemand, &pIDecoder))
+					if (0 <= (hr = piFactory->CreateDecoderFromStream(pIWICStream, 0, 
+						WICDecodeMetadataCacheOnDemand, &pIDecoder)))
 					{
-						ConvertImage(pIDecoder);
+						hr = ConvertImage(pIDecoder);
 
 						pIDecoder->Release();
 					}
@@ -251,6 +207,8 @@ void YCameraWnd::ConvertImage(ULONG cb)
 			}
 		}
 	}
+
+	return hr;
 }
 
 LRESULT YCameraWnd::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
@@ -286,7 +244,11 @@ LRESULT YCameraWnd::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPara
 	case VBmp::e_update:
 		if (wParam)
 		{
-			ConvertImage((ULONG)wParam);
+			if (HRESULT hr = ConvertImage((ULONG)wParam))
+			{
+				DbgPrint("ConvertImage=%x\r\n", hr);
+				break;
+			}
 		}
 		InvalidateRect(hwnd, 0, FALSE);
 		break;

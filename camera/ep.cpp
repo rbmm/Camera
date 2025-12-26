@@ -175,6 +175,7 @@ INT_PTR WCDlg::DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 				KillTimer(hwndDlg, stat_timer);
 				EnableCtrls(hwndDlg, TRUE);
 				SetDlgItemTextW(hwndDlg, IDC_STATIC1, 0);
+				SetWindowTextW(hwndDlg, L"Camera");
 			}
 			break;
 
@@ -254,23 +255,36 @@ void WCDlg::OnOk(HWND hwndDlg)
 			vid->Release();
 		}
 
+		KsRead::MODE mode = KsRead::e_exclusive;
 		if (pin)
 		{
-			status = pin->Create(hFile, pDRVideo);
+			status = pin->Create(hFile, pDRVideo, &mode);
 		}
 
 		NtClose(hFile);
 
 		if (0 <= status)
 		{
-			KSSTATE state;
-			pin->GetState(&state);
+			//KSSTATE state;
+			//pin->GetState(&state);
 
 			if (0 <= (status = pin->SetState(KSSTATE_RUN)))
 			{
 				EnableCtrls(hwndDlg, FALSE);
 
 				_nReadCount = 0;
+
+				PCWSTR caption = 0;
+				switch (mode)
+				{
+				case KsRead::e_primary: caption = L"primary";
+					break;
+				case KsRead::e_secondary: caption = L"secondary";
+					break;
+				case KsRead::e_exclusive: caption = L"exclusive";
+					break;
+				}
+				SetWindowTextW(hwndDlg, caption);
 
 				SetTimer(hwndDlg, stat_timer, 1000, 0);
 				_pin = pin;

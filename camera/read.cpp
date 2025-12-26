@@ -205,7 +205,7 @@ NTSTATUS KsRead::GetState(PKSSTATE state)
 
 #define IOCTL_KS_CUSTOM CTL_CODE(FILE_DEVICE_KS, 0x833, METHOD_OUT_DIRECT, FILE_READ_ACCESS)
 
-NTSTATUS KsRead::Create(_In_ HANDLE FilterHandle, _In_ PKS_DATARANGE_VIDEO pDRVideo)
+NTSTATUS KsRead::Create(_In_ HANDLE FilterHandle, _In_ PKS_DATARANGE_VIDEO pDRVideo, _Out_ MODE* mode)
 {
 	ULONG SampleSize = pDRVideo->DataRange.SampleSize;
 
@@ -237,8 +237,14 @@ NTSTATUS KsRead::Create(_In_ HANDLE FilterHandle, _In_ PKS_DATARANGE_VIDEO pDRVi
 			switch (status = SynchronousDeviceControl(hFile, IOCTL_KS_CUSTOM, 0, 0, Data, SamplesBufferSize, &cb))
 			{
 			case STATUS_INVALID_DEVICE_REQUEST:
+				*mode = e_exclusive;
+				goto __ok;
 			case STATUS_PORT_ALREADY_SET:
+				*mode = e_secondary;
+				goto __ok;
 			case STATUS_SUCCESS:
+				*mode = e_primary;
+__ok:
 				if (0 <= (status = NT_IRP::BindIoCompletion(this, hFile)))
 				{
 					PSLIST_HEADER head = &_head;
