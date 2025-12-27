@@ -211,6 +211,18 @@ HRESULT YCameraWnd::ConvertImage(ULONG cb)
 	return hr;
 }
 
+void ShowTip(HWND hwnd, UINT uID, PCWSTR szInfo)
+{
+	NOTIFYICONDATAW nid = { sizeof(nid), hwnd, uID, NIF_INFO };
+
+	wcscpy(nid.szInfoTitle, L"[ Save to: ]");
+	wcscpy_s(nid.szInfo, _countof(nid.szInfo), szInfo);
+	nid.dwInfoFlags = NIIF_INFO;
+	nid.uTimeout = 4000;
+
+	Shell_NotifyIconW(NIM_MODIFY, &nid); 
+}
+
 LRESULT YCameraWnd::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
 	PAINTSTRUCT ps;
@@ -251,6 +263,43 @@ LRESULT YCameraWnd::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPara
 			}
 		}
 		InvalidateRect(hwnd, 0, FALSE);
+		break;
+
+	case VBmp::e_save:
+		if (_vid )
+		{
+			if (ULONG len = GetWindowTextLengthW((HWND)lParam))
+			{
+				PWSTR FileName = (PWSTR)alloca((++len + 32) * sizeof(WCHAR));
+				if (len = GetWindowTextW((HWND)lParam, FileName, len))
+				{
+					SYSTEMTIME st;
+					GetLocalTime(&st);
+					swprintf_s(FileName + len, 32,
+						L"\\%u-%02u-%02u %02u-%02u-%02u.bmp", st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
+					if (HANDLE hFile = fixH(CreateFileW(FileName, FILE_APPEND_DATA, 0, 0, CREATE_ALWAYS, 0, 0)))
+					{
+						PBITMAPFILEHEADER p = _vid->GetFileBuffer();
+						uMsg = WriteFile(hFile, p, p->bfSize, (ULONG*)&uMsg, 0);
+						NtClose(hFile);
+						if (uMsg)
+						{
+							union {
+								LPARAM lp;
+								FILETIME ft;
+							};
+							SystemTimeToFileTime(&st, &ft);
+							ShowTip(GetAncestor((HWND)lParam, GA_PARENT), (ULONG)wParam, FileName + len + 1);
+							return lp;
+						}
+					}
+					else
+					{
+						DbgPrint("CreateFileW(\"%ws\")=%x\r\n", RtlGetLastNtStatus());
+					}
+				}
+			}
+		}
 		break;
 
 	case WM_DESTROY:

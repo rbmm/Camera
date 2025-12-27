@@ -131,10 +131,6 @@ void KsRead::Read()
 	{
 		Read(Data);
 	}
-	else
-	{
-		__debugbreak();
-	}
 }
 
 KsRead::KsRead(HWND hwnd, VBmp* vid) : _hwnd(hwnd), _vid(vid)

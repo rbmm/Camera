@@ -4,13 +4,8 @@
 #include <WINDOWSX.H>
 
 #include <wincodec.h  >
-//#include <amvideo.h >
-//
-//#include <mfidl.h>
-//#include <Mfreadwrite.h>
-//#include <mferror.h>
-//#include <Wmcodecdsp.h>
-//#include <Codecapi.h>
+#include <ShlObj_core.h >
+#include <ShObjIdl_core.h >
 _NT_BEGIN
 #include <cfgmgr32.h>
 

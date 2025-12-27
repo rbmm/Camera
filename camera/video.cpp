@@ -8,25 +8,39 @@ PVOID VBmp::Create(LONG cx, LONG cy)
 {
 	ULONG size = cx * cy << 2;
 
-	BITMAPINFO bi = { 
-		{ sizeof(BITMAPINFOHEADER), cx, -cy, 1, 32, BI_RGB, size } 
-	};
-
-	PVOID Bits = 0;
-
-	if (HBITMAP hbmp = CreateDIBSection(0, &bi, DIB_RGB_COLORS, &Bits, 0, 0))
+	if (HANDLE hSection = CreateFileMappingW(INVALID_HANDLE_VALUE, 0, PAGE_READWRITE, 0, size + sizeof(BMEX), 0))
 	{
-		_hBmp = hbmp, _Bits = Bits, _cx = cx, _cy = cy, _biSizeImage = size;
+		BITMAPINFO bi = { 
+			{ sizeof(BITMAPINFOHEADER), cx, -cy, 1, 32, BI_RGB, size } 
+		};
 
-		if (_BufSize)
+		PVOID Bits = 0;
+
+		if (HBITMAP hbmp = CreateDIBSection(0, &bi, DIB_RGB_COLORS, &Bits, hSection, __builtin_offsetof(BMEX, Bits)))
 		{
-			if (!(_buf = new UCHAR[_BufSize]))
+			_hBmp = hbmp, _Bits = Bits, _cx = cx, _cy = cy, _biSizeImage = size, _hSection = hSection;
+
+			BMEX* p = CONTAINING_RECORD(Bits, BMEX, Bits);
+			p->bfh.bfType = 'MB';
+			p->bfh.bfOffBits = sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER);
+			p->bfh.bfSize = size + sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER);
+			p->bfh.bfReserved1 = 0;
+			p->bfh.bfReserved2 = 0;
+
+			memcpy(&p->bih, &bi.bmiHeader, sizeof(BITMAPINFOHEADER));
+
+			if (_BufSize)
 			{
-				_BufSize = 0;
+				if (!(_buf = new UCHAR[_BufSize]))
+				{
+					_BufSize = 0;
+				}
 			}
+
+			return Bits;
 		}
 
-		return Bits;
+		NtClose(hSection);
 	}
 
 	return 0;

@@ -1,8 +1,17 @@
 #pragma once
 
+struct BMEX 
+{
+	USHORT ForAlign;
+	BITMAPFILEHEADER bfh;
+	BITMAPINFOHEADER bih;
+	UCHAR Bits[];
+};
+
 class VBmp
 {
 	HBITMAP _hBmp = 0;
+	HANDLE _hSection = 0;
 	PVOID _Bits = 0, _buf = 0;
 	ULONG _cx = 0, _cy = 0, _BufSize, _biSizeImage = 0;
 	LONG _dwRef = 1;
@@ -18,11 +27,16 @@ class VBmp
 		{
 			DeleteObject(_hBmp);
 		}
+
+		if (_hSection)
+		{
+			NtClose(_hSection);
+		}
 	}
 
 public:
 
-	enum { e_set = WM_USER, e_update };
+	enum { e_set = WM_USER, e_update, e_save };
 
 	VBmp(ULONG BufSize) : _BufSize(BufSize)
 	{
@@ -56,6 +70,11 @@ public:
 	ULONG height()
 	{
 		return _cy;
+	}
+
+	PBITMAPFILEHEADER GetFileBuffer()
+	{
+		return &CONTAINING_RECORD(_Bits, BMEX, Bits)->bfh;
 	}
 
 	PVOID GetBits()

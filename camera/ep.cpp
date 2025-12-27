@@ -25,6 +25,10 @@ extern const volatile UCHAR guz = 0;
 #define ID_FPS    IDC_CHECK1
 #define ID_VIDEO  IDC_CUSTOM1
 #define ID_LOG    IDC_BUTTON1
+#define ID_REFRESH    IDC_BUTTON2
+#define ID_SAVE    IDC_BUTTON3
+#define ID_BROWSE    IDC_BUTTON4
+#define ID_PATH    IDC_EDIT1
 
 struct KSMULTIPLE_ITEM_LIST
 {
@@ -61,20 +65,34 @@ struct Camera
 
 class WCDlg : public ZDlg, CUILayot, CIcons
 {
+	union {
+		LONGLONG _ft = {};
+		FILETIME _FileTime;
+	};
 	PVOID _buf = 0;
 	KsRead* _pin = 0;
 	HFONT _hfont = 0;
 	int _i = -1;
-	LONG _nReadCount;
+	UINT _uTaskbarRestart;
+	LONG _nReadCount, _flags = (1 << e_path_not_valid) | (1 << e_bits_not_valid);
+	BOOLEAN _bTraySet = FALSE;
 
-	enum { stat_timer = 1 };
+	enum { e_path_not_valid, e_bits_not_valid, stat_timer, uTryID, WM_TRAY_CB = WM_USER };
 
 	void AddCameras(HWND hwndDlg, GUID* InterfaceClassGuid);
 	BOOL OnInitDialog(HWND hwndDlg);
-	void OnDestroy(HWND hwndCB);
+	void AddCameras(HWND hwndDlg);
+	void Destroy_I(HWND hwndCB);
 	void OnOk(HWND hwndDlg);
 	void OnSelChanged(HWND hwndDlg, HWND hwndCB);
 	ULONG OnSelChanged(HWND hwndCB, KSMULTIPLE_ITEM_LIST* pList);
+
+	void SetSaveState(HWND hwndDlg, LONG flags);
+
+	void Destroy(HWND hwndDlg)
+	{
+		Destroy_I(GetDlgItem(hwndDlg, ID_CAMERA));
+	}
 
 	BOOL Stop()
 	{
@@ -102,11 +120,17 @@ class WCDlg : public ZDlg, CUILayot, CIcons
 		}
 	}
 
+	void RemoveIcon(HWND hwnd);
+
+	BOOL AddTaskbarIcon(HWND hwnd);
+
+	void ShowTip(HWND hwnd, PCWSTR szInfoTitle);
+
 	virtual INT_PTR DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
 	void EnableCtrls(HWND hwndDlg, BOOL bEnable)
 	{
-		static const UINT _s_ids[] = { IDABORT, IDOK, ID_FPS, ID_FORMAT, ID_CAMERA };
+		static const UINT _s_ids[] = { IDABORT, IDOK, ID_FPS, ID_FORMAT, ID_CAMERA, ID_REFRESH };
 		ULONG n = _countof(_s_ids);
 		do 
 		{
@@ -133,14 +157,121 @@ HFONT CreateFont()
 	return 0;
 }
 
+void SelectFolder(HWND hwnd)
+{
+	PWSTR pszFilePath = 0;
+	IFileOpenDialog *pFileOpen;
+
+	HRESULT hr = CoCreateInstance(__uuidof(FileOpenDialog), NULL, CLSCTX_ALL, IID_PPV_ARGS(&pFileOpen));
+
+	if (0 <= hr)
+	{
+		if (0 <= (hr = pFileOpen->SetOptions(FOS_PICKFOLDERS|FOS_NOVALIDATE|FOS_NOTESTFILECREATE|FOS_DONTADDTORECENT|FOS_FORCESHOWHIDDEN)) &&
+			0 <= (hr = pFileOpen->Show(hwnd)))
+		{
+			IShellItem *pItem;
+
+			if (0 <= (hr = pFileOpen->GetResult(&pItem)))
+			{
+				if (0 <= (hr = pItem->GetDisplayName(SIGDN_FILESYSPATH, &pszFilePath)))
+				{
+					SetWindowTextW(hwnd, pszFilePath);
+					CoTaskMemFree(pszFilePath);
+				}
+
+				pItem->Release();
+			}
+		}
+
+		pFileOpen->Release();
+	}
+}
+
+void OpenFolder(HWND hwnd, _In_ CONST FILETIME* lpFileTime)
+{
+	SYSTEMTIME st;
+	if (FileTimeToSystemTime(lpFileTime, &st))
+	{
+		if (ULONG len = GetWindowTextLengthW(hwnd))
+		{
+			PWSTR FileName = (PWSTR)alloca((++len + 32) * sizeof(WCHAR));
+			if (len = GetWindowTextW(hwnd, FileName, len))
+			{
+				swprintf_s(FileName + len, 32,
+					L"\\%u-%02u-%02u %02u-%02u-%02u.bmp", st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
+				
+				if (PIDLIST_ABSOLUTE pidl = ILCreateFromPath(FileName))
+				{
+					SHOpenFolderAndSelectItems(pidl, 0, 0, 0);
+					ILFree(pidl);
+				}
+			}
+		}
+	}
+}
+
+BOOL DoesFileExists(HWND hwnd)
+{
+	if (ULONG len = GetWindowTextLengthW(hwnd))
+	{
+		PWSTR FileName = (PWSTR)alloca(++len * sizeof(WCHAR));
+		GetWindowTextW(hwnd, FileName , len);
+		return RtlDoesFileExists_U(FileName);
+	}
+
+	return FALSE;
+}
+
+void WCDlg::SetSaveState(HWND hwndDlg, LONG flags)
+{
+	if (!flags ^ !_flags )
+	{
+		EnableWindow(GetDlgItem(hwndDlg, ID_SAVE), !_flags);
+	}
+}
+
+void WCDlg::RemoveIcon(HWND hwnd)
+{
+	if (_bTraySet)
+	{
+		NOTIFYICONDATA ni = { sizeof(ni), hwnd, uTryID };
+		Shell_NotifyIcon(NIM_DELETE, &ni);
+		_bTraySet = FALSE;
+	}
+}
+
+BOOL WCDlg::AddTaskbarIcon(HWND hwnd)
+{
+	NOTIFYICONDATA ni = { 
+		sizeof(ni), hwnd, uTryID, NIF_MESSAGE|NIF_ICON|NIF_TIP|NIF_SHOWTIP, WM_TRAY_CB 
+	};
+
+	if (0 <= LoadIconWithScaleDown((HINSTANCE)&__ImageBase, MAKEINTRESOURCEW(1), 
+		GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), &ni.hIcon))
+	{
+		wcscpy(ni.szTip, L" Camera 1.0.0.0 ");
+		BOOL b = Shell_NotifyIconW(NIM_ADD, &ni);
+		DestroyIcon(ni.hIcon);
+		if (b)
+		{
+			_bTraySet = TRUE;
+			ni.uVersion = NOTIFYICON_VERSION_4;
+			return Shell_NotifyIcon(NIM_SETVERSION, &ni);
+		}
+	}
+
+	return FALSE;
+}
+
 INT_PTR WCDlg::DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
 	switch (uMsg)
 	{
 	case WM_DESTROY:
 		Stop();
-		OnDestroy(GetDlgItem(hwndDlg, ID_CAMERA));
+		Destroy(hwndDlg);
 		if (_hfont) DeleteObject(_hfont);
+		RemoveIcon(hwndDlg);
 		break;
 	
 	case WM_SIZE:
@@ -154,6 +285,7 @@ INT_PTR WCDlg::DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			return 0;
 		}
 		SetIcons(hwndDlg, (HINSTANCE)&__ImageBase, MAKEINTRESOURCEW(1));
+		AddTaskbarIcon(hwndDlg);
 		_hfont = CreateFont();
 		break;
 
@@ -176,6 +308,7 @@ INT_PTR WCDlg::DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 				EnableCtrls(hwndDlg, TRUE);
 				SetDlgItemTextW(hwndDlg, IDC_STATIC1, 0);
 				SetWindowTextW(hwndDlg, L"Camera");
+				SetSaveState(hwndDlg, _bittestandset(&_flags, e_bits_not_valid));
 			}
 			break;
 
@@ -187,8 +320,28 @@ INT_PTR WCDlg::DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			OnSelChanged(hwndDlg, (HWND)lParam);
 			break;
 
+		case MAKEWPARAM(ID_PATH, EN_UPDATE):
+			SetSaveState(hwndDlg, DoesFileExists((HWND)lParam) ? 
+				_bittestandreset(&_flags, e_path_not_valid) : _bittestandset(&_flags, e_path_not_valid));
+			break;
+
 		case IDOK:
 			OnOk(hwndDlg);
+			break;
+
+		case ID_REFRESH:
+			Destroy(hwndDlg);
+			ComboBox_ResetContent(GetDlgItem(hwndDlg, ID_FORMAT));
+			EnableWindow(GetDlgItem(hwndDlg, IDOK), FALSE);
+			AddCameras(hwndDlg);
+			break;
+
+		case ID_BROWSE:
+			SelectFolder(GetDlgItem(hwndDlg, ID_PATH));
+			break;
+
+		case ID_SAVE:
+			_ft = SendMessageW(GetDlgItem(hwndDlg, ID_VIDEO), VBmp::e_save, uTryID, (LPARAM)GetDlgItem(hwndDlg, IDC_EDIT1));
 			break;
 		
 		case ID_LOG:
@@ -209,6 +362,30 @@ INT_PTR WCDlg::DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			break;
 		}
 		break;
+
+	case WM_TRAY_CB:
+		switch (HIWORD(lParam))
+		{
+		case uTryID:
+			switch (LOWORD(lParam))
+			{
+			case NIN_BALLOONUSERCLICK:
+				if (_ft)
+				{
+					OpenFolder(GetDlgItem(hwndDlg, ID_PATH), &_FileTime);
+				}
+				break;
+			}
+			break;
+		}
+		break;
+
+	default:
+		if (uMsg == _uTaskbarRestart)
+		{
+			AddTaskbarIcon(hwndDlg);
+			return 0;
+		}
 	}
 	return __super::DialogProc(hwndDlg, uMsg, wParam, lParam);
 }
@@ -287,6 +464,8 @@ void WCDlg::OnOk(HWND hwndDlg)
 				SetWindowTextW(hwndDlg, caption);
 
 				SetTimer(hwndDlg, stat_timer, 1000, 0);
+				SetSaveState(hwndDlg, _bittestandreset(&_flags, e_bits_not_valid));
+
 				_pin = pin;
 				pin->Start();
 				return ;
@@ -302,11 +481,12 @@ void WCDlg::OnOk(HWND hwndDlg)
 	ShowErrorBox(hwndDlg, HRESULT_FROM_NT(status), 0);
 }
 
-void WCDlg::OnDestroy(HWND hwndCB)
+void WCDlg::Destroy_I(HWND hwndCB)
 {
 	if (PVOID buf = _buf)
 	{
 		LocalFree(buf);
+		_buf = 0;
 	}
 	
 	int i = ComboBox_GetCount(hwndCB);
@@ -318,6 +498,7 @@ void WCDlg::OnDestroy(HWND hwndCB)
 			delete (Camera*)ComboBox_GetItemData(hwndCB, --i);
 		} while (i);
 	}
+	ComboBox_ResetContent(hwndCB);
 }
 
 ULONG WCDlg::OnSelChanged(HWND hwndCB, KSMULTIPLE_ITEM_LIST* pList)
@@ -690,7 +871,7 @@ void WCDlg::AddCameras(HWND hwndDlg, GUID* InterfaceClassGuid)
 	}
 }
 
-BOOL WCDlg::OnInitDialog(HWND hwndDlg)
+void WCDlg::AddCameras(HWND hwndDlg)
 {
 	static const GUID uuids[] = {
 		KSCATEGORY_VIDEO_CAMERA, KSCATEGORY_SENSOR_CAMERA, KSCATEGORY_NETWORK_CAMERA, KSCATEGORY_MEP_CAMERA
@@ -700,9 +881,19 @@ BOOL WCDlg::OnInitDialog(HWND hwndDlg)
 	{
 		AddCameras(hwndDlg, const_cast<GUID*>(&uuids[--n]));
 	} while (n);
+}
 
+BOOL WCDlg::OnInitDialog(HWND hwndDlg)
+{
+	AddCameras(hwndDlg);
 	CUILayot::CreateLayout(hwndDlg);
-
+	_uTaskbarRestart = RegisterWindowMessage(L"TaskbarCreated");
+	PWSTR psz;
+	if (0 <= SHGetKnownFolderPath(FOLDERID_Pictures, 0, 0, &psz))
+	{
+		SetDlgItemTextW(hwndDlg, ID_PATH, psz);
+		CoTaskMemFree(psz);
+	}
 	return TRUE;
 }
 
@@ -719,8 +910,11 @@ public:
 	static void Unregister();
 };
 
+void TestCsq();
+
 void CALLBACK ep(void*)
 {
+	//TestCsq();
 	initterm();
 	if (YCameraWnd::Register())
 	{
