@@ -51,6 +51,7 @@
     <ClCompile Include="print.cpp" />
     <ClCompile Include="zip.cpp" />
     <ClInclude Include="print.h" />
+    <ClInclude Include="resource1.h" />
     <ClInclude Include="stdafx.h" />
     <ClCompile Include="ep.cpp" />
     <ClCompile Include="stdafx.cpp">
@@ -63,6 +64,9 @@
       <Outputs>%(Filename).obj</Outputs>
       <ExcludedFromBuild Condition="'$(PlatformTarget)'!='x64' or !exists('%(Identity)')">true</ExcludedFromBuild>
     </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="drvinst.rc" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
