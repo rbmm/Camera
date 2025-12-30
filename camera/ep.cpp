@@ -81,7 +81,6 @@ class WCDlg : public ZDlg, CUILayot, CIcons
 
 	void AddCameras(HWND hwndDlg, GUID* InterfaceClassGuid);
 	BOOL OnInitDialog(HWND hwndDlg);
-	void AddCameras(HWND hwndDlg);
 	void Destroy_I(HWND hwndCB);
 	void OnOk(HWND hwndDlg);
 	void OnSelChanged(HWND hwndDlg, HWND hwndCB);
@@ -333,7 +332,7 @@ INT_PTR WCDlg::DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			Destroy(hwndDlg);
 			ComboBox_ResetContent(GetDlgItem(hwndDlg, ID_FORMAT));
 			EnableWindow(GetDlgItem(hwndDlg, IDOK), FALSE);
-			AddCameras(hwndDlg);
+			AddCameras(hwndDlg, const_cast<GUID*>(&KSCATEGORY_VIDEO_CAMERA));
 			break;
 
 		case ID_BROWSE:
@@ -871,21 +870,21 @@ void WCDlg::AddCameras(HWND hwndDlg, GUID* InterfaceClassGuid)
 	}
 }
 
-void WCDlg::AddCameras(HWND hwndDlg)
-{
-	static const GUID uuids[] = {
-		KSCATEGORY_VIDEO_CAMERA, KSCATEGORY_SENSOR_CAMERA, KSCATEGORY_NETWORK_CAMERA, KSCATEGORY_MEP_CAMERA
-	};
-	ULONG n = _countof(uuids);
-	do 
-	{
-		AddCameras(hwndDlg, const_cast<GUID*>(&uuids[--n]));
-	} while (n);
-}
+//void WCDlg::AddCameras(HWND hwndDlg)
+//{
+//	static const GUID uuids[] = {
+//		KSCATEGORY_VIDEO_CAMERA, KSCATEGORY_SENSOR_CAMERA, KSCATEGORY_NETWORK_CAMERA, KSCATEGORY_MEP_CAMERA
+//	};
+//	ULONG n = _countof(uuids);
+//	do 
+//	{
+//		AddCameras(hwndDlg, const_cast<GUID*>(&uuids[--n]));
+//	} while (n);
+//}
 
 BOOL WCDlg::OnInitDialog(HWND hwndDlg)
 {
-	AddCameras(hwndDlg);
+	AddCameras(hwndDlg, const_cast<GUID*>(&KSCATEGORY_VIDEO_CAMERA));
 	CUILayot::CreateLayout(hwndDlg);
 	_uTaskbarRestart = RegisterWindowMessage(L"TaskbarCreated");
 	PWSTR psz;
