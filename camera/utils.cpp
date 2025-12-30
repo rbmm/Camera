@@ -29,6 +29,27 @@ SynchronousDeviceControl(
 	return status;
 }
 
+CONFIGRET Get_GetFriendlyName(PCWSTR pszDeviceInterface,
+	DEVPROPTYPE* PropertyType,
+	PBYTE pb,
+	PULONG pcb)
+{
+	ULONG s = *pcb;
+	if (CONFIGRET cr = CM_Get_Device_Interface_PropertyW(pszDeviceInterface, &DEVPKEY_NAME, PropertyType, pb, pcb, 0))
+	{
+		DEVINST dnDevInst;
+		WCHAR InstanceId[MAX_DEVICE_ID_LEN];
+		*pcb = s, s = sizeof(InstanceId);
+		CR_SUCCESS == (cr = CM_Get_Device_Interface_PropertyW(pszDeviceInterface,
+			&DEVPKEY_Device_InstanceId, PropertyType, (PBYTE)InstanceId, &s, 0)) &&
+			CR_SUCCESS == (cr = CM_Locate_DevNodeW(&dnDevInst, InstanceId, CM_LOCATE_DEVNODE_NORMAL)) &&
+			CR_SUCCESS == (cr = CM_Get_DevNode_PropertyW(dnDevInst, &DEVPKEY_NAME, PropertyType, pb, pcb, 0));
+
+		return cr;
+	}
+	return CR_SUCCESS;
+}
+
 CONFIGRET GetFriendlyName(_Out_ PWSTR* ppszName, _In_ PCWSTR pszDeviceInterface)
 {
 	DEVPROPTYPE PropertyType;
@@ -42,13 +63,13 @@ CONFIGRET GetFriendlyName(_Out_ PWSTR* ppszName, _In_ PCWSTR pszDeviceInterface)
 	ULONG cb = 0x80;
 	CONFIGRET cr;
 
-	do 
+	do
 	{
 		cr = CR_OUT_OF_MEMORY;
 
 		if (pv = LocalAlloc(0, cb))
 		{
-			if (CR_SUCCESS == (cr = CM_Get_Device_Interface_PropertyW(pszDeviceInterface, &DEVPKEY_NAME, &PropertyType, pb, &cb, 0)))
+			if (CR_SUCCESS == (cr = Get_GetFriendlyName(pszDeviceInterface, &PropertyType, pb, &cb)))
 			{
 				if (PropertyType == DEVPROP_TYPE_STRING)
 				{
