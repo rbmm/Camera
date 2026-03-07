@@ -1,0 +1,132 @@
+// Microsoft Visual C++ generated resource script.
+//
+#include "resource.h"
+
+#define APSTUDIO_READONLY_SYMBOLS
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 2 resource.
+//
+#include "winres.h"
+#include "../inc/idcres.h"
+/////////////////////////////////////////////////////////////////////////////
+#undef APSTUDIO_READONLY_SYMBOLS
+
+/////////////////////////////////////////////////////////////////////////////
+// English (United States) resources
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+#pragma code_page(1252)
+
+#ifdef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// TEXTINCLUDE
+//
+
+1 TEXTINCLUDE 
+BEGIN
+    "resource.h\0"
+END
+
+2 TEXTINCLUDE 
+BEGIN
+    "#include ""winres.h""\r\n"
+    "#include ""../inc/idcres.h""\0"
+END
+
+3 TEXTINCLUDE 
+BEGIN
+    "#include "".rc2""\0"
+END
+
+#endif    // APSTUDIO_INVOKED
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Dialog
+//
+
+IDD_DIALOG1 DIALOGEX 0, 0, 585, 401
+STYLE DS_SETFONT | DS_3DLOOK | DS_FIXEDSYS | DS_CENTER | WS_MINIMIZEBOX | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME
+CAPTION "Camera"
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    DEFPUSHBUTTON   "Start",IDOK,528,380,50,14,WS_DISABLED
+    PUSHBUTTON      "Stop",IDABORT,473,380,50,14,WS_DISABLED
+    COMBOBOX        IDC_COMBO1,7,7,189,30,CBS_DROPDOWNLIST | WS_DISABLED | WS_VSCROLL | WS_TABSTOP
+    COMBOBOX        IDC_COMBO2,439,7,139,30,CBS_DROPDOWNLIST | WS_DISABLED | WS_VSCROLL | WS_TABSTOP
+    CONTROL         "",IDC_CUSTOM1,"E746983BB3CA49f79A71322254EE5F6A",WS_TABSTOP,7,46,571,331
+    PUSHBUTTON      "Show Log",IDC_BUTTON1,72,25,50,14
+    PUSHBUTTON      "Refresh",IDC_BUTTON2,418,380,50,14,WS_DISABLED
+    PUSHBUTTON      "Save",IDC_BUTTON3,528,25,50,14,WS_DISABLED
+    PUSHBUTTON      "Browse",IDC_BUTTON4,473,25,50,14
+    EDITTEXT        IDC_EDIT1,127,25,340,14,ES_AUTOHSCROLL
+    CONTROL         "",IDC_IPADDRESS1,"SysIPAddress32",WS_TABSTOP,7,379,100,15
+    PUSHBUTTON      "Connect",IDC_BUTTON5,308,380,50,14
+    PUSHBUTTON      "Disconnect",IDC_BUTTON6,363,380,50,14,WS_DISABLED
+    EDITTEXT        IDC_EDIT2,113,380,142,14
+    PUSHBUTTON      "Hide Picture",IDC_BUTTON7,15,25,50,14,WS_DISABLED
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// DESIGNINFO
+//
+
+#ifdef APSTUDIO_INVOKED
+GUIDELINES DESIGNINFO
+BEGIN
+    IDD_DIALOG1, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 578
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 394
+    END
+END
+#endif    // APSTUDIO_INVOKED
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Menu
+//
+
+IDR_MENU1 MENU
+BEGIN
+    POPUP ""
+    BEGIN
+        MENUITEM "Kiosk",                       ID_0_KIOSK
+        MENUITEM "Exit",                        ID_0_EXIT
+    END
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// AFX_DIALOG_LAYOUT
+//
+
+IDD_DIALOG1 AFX_DIALOG_LAYOUT
+BEGIN
+    0
+END
+
+#endif    // English (United States) resources
+/////////////////////////////////////////////////////////////////////////////
+
+
+
+#ifndef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 3 resource.
+//
+#include ".rc2"
+/////////////////////////////////////////////////////////////////////////////
+#endif    // not APSTUDIO_INVOKED
+
