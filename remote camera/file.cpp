@@ -2,7 +2,66 @@
 
 _NT_BEGIN
 
+#include "log.h"
 #include "file.h"
+
+HRESULT GetLastHresult(ULONG dwError = GetLastError())
+{
+	NTSTATUS status = RtlGetLastNtStatus();
+
+	return RtlNtStatusToDosErrorNoTeb(status) == dwError ? HRESULT_FROM_NT(status) : HRESULT_FROM_WIN32(dwError);
+}
+
+PWSTR IsRegExpandSz(PKEY_VALUE_PARTIAL_INFORMATION_ALIGN64 pkvpi)
+{
+	ULONG DataLength = pkvpi->DataLength;
+	PWSTR psz = (PWSTR)RtlOffsetToPointer(pkvpi->Data, DataLength - sizeof(WCHAR));
+
+	return pkvpi->Type == REG_EXPAND_SZ && DataLength && 
+		!(DataLength & (sizeof(WCHAR) - 1)) && !*psz ? psz : 0;
+}
+
+NTSTATUS ExpandName(_In_ PCWSTR name, _Out_ PUNICODE_STRING NtName)
+{
+	HANDLE hKey;
+	NTSTATUS status;
+	STATIC_OBJECT_ATTRIBUTES(oa, "\\registry\\MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\User Shell Folders");
+	if (0 <= (status = ZwOpenKey(&hKey, KEY_READ, &oa)))
+	{
+		STATIC_UNICODE_STRING(Common_Documents, "Common Documents");
+		PKEY_VALUE_PARTIAL_INFORMATION_ALIGN64 pkvpi = (PKEY_VALUE_PARTIAL_INFORMATION_ALIGN64)
+			alloca(wcslen(name)*sizeof(WCHAR) + 514);
+		ULONG cb;
+		status = ZwQueryValueKey(hKey, &Common_Documents, KeyValuePartialInformationAlign64, pkvpi, 512, &cb);
+		NtClose(hKey);
+		if (0 <= status)
+		{
+			if (PWSTR psz = IsRegExpandSz(pkvpi))
+			{
+				*psz = L'\\';
+				wcscpy(psz + 1, name);
+				psz = 0, cb = 0;
+
+				while (cb = ExpandEnvironmentStringsW((PWSTR)pkvpi->Data, psz, cb))
+				{
+					if (psz)
+					{
+						return RtlDosPathNameToNtPathName_U_WithStatus(psz, NtName, 0, 0);
+					}
+
+					psz = (PWSTR)alloca(cb * sizeof(WCHAR));
+				}
+
+				return GetLastHresult();
+
+			}
+
+			return STATUS_OBJECT_TYPE_MISMATCH;
+		}
+	}
+
+	return status;
+}
 
 NTSTATUS ReadFromFile(_In_ PCWSTR lpFileName, 
 					  _Out_ PBYTE* ppb, 
@@ -12,7 +71,7 @@ NTSTATUS ReadFromFile(_In_ PCWSTR lpFileName,
 {
 	UNICODE_STRING ObjectName;
 
-	NTSTATUS status = RtlDosPathNameToNtPathName_U_WithStatus(lpFileName, &ObjectName, 0, 0);
+	NTSTATUS status = ExpandName(lpFileName, &ObjectName);
 
 	if (0 <= status)
 	{
@@ -65,7 +124,7 @@ NTSTATUS SaveToFile(_In_ PCWSTR lpFileName, _In_ const void* lpBuffer, _In_ ULON
 {
 	UNICODE_STRING ObjectName;
 
-	NTSTATUS status = RtlDosPathNameToNtPathName_U_WithStatus(lpFileName, &ObjectName, 0, 0);
+	NTSTATUS status = ExpandName(lpFileName, &ObjectName);
 
 	if (0 <= status)
 	{
@@ -78,6 +137,7 @@ NTSTATUS SaveToFile(_In_ PCWSTR lpFileName, _In_ const void* lpBuffer, _In_ ULON
 		status = NtCreateFile(&hFile, FILE_APPEND_DATA|SYNCHRONIZE, &oa, &iosb, &AllocationSize,
 			0, 0, FILE_OVERWRITE_IF, FILE_SYNCHRONOUS_IO_NONALERT|FILE_NON_DIRECTORY_FILE, 0, 0);
 
+		DbgPrint("create(%wZ)=%x\r\n", &ObjectName, status);
 		RtlFreeUnicodeString(&ObjectName);
 
 		if (0 <= status)

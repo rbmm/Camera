@@ -48,6 +48,9 @@
     <ClCompile Include="H264.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="key.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="stdafx.h">

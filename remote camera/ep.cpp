@@ -706,15 +706,16 @@ public:
 	static void Unregister();
 };
 
-void CST();
 NTSTATUS GenKeyXY();
-BOOL StartServer();
-NTSTATUS ExpandName(_In_ PCWSTR name, _Out_ PUNICODE_STRING NtName);
 
 bool _G_stop = false;
 
 void CALLBACK ep(void*)
 {
+	if (PWSTR name = wcschr(GetCommandLineW(), '>'))
+	{
+		ExitProcess(GenKeyXY());
+	}
 	initterm();
 	if (YCameraWnd::Register())
 	{
@@ -723,7 +724,7 @@ void CALLBACK ep(void*)
 			WSADATA wd;
 			if (!WSAStartup(WINSOCK_VERSION, &wd))
 			{
-				_G_log.Init(0x100000);
+				_G_log.Init(0x10000);
 				WCDlg dlg;
 				dlg.DoModal((HINSTANCE)&__ImageBase, MAKEINTRESOURCEW(IDD_DIALOG1), 0, 0);
 

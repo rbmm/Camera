@@ -49,6 +49,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="H264.cpp" />
+    <ClCompile Include="key.cpp" />
     <ClCompile Include="utils.cpp" />
     <ClCompile Include="video.cpp" />
     <ClInclude Include="client.h" />
