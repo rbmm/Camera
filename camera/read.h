@@ -10,6 +10,12 @@ class KsRead : public IO_OBJECT, KS_BITMAPINFOHEADER
 	LONGLONG _Bytes = 0;
 	HWND _hwnd;
 	VBmp* _vid;
+	
+	SRWLOCK m_lock = {};
+	BYTE* m_i420 = 0;
+	x265_picture* m_pic = 0;
+	x265_encoder* m_encoder = 0;
+
 	ULONG64 _StartTime = 0;
 	ULONG64 _LastCompleteTime = 0;
 	ULONG64 _ReadTime = 0;

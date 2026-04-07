@@ -2,7 +2,6 @@
 
 _NT_BEGIN
 #include "log.h"
-#include "https.h"
 #include "video.h"
 #include "file.h"
 #include "utils.h"
@@ -71,17 +70,11 @@ CClient::~CClient()
 	DbgPrint("%hs<%p>\r\n", __FUNCTION__, this);
 }
 
-ULONG CClient::GetConnectData(void** ppSendBuffer)
+NTSTATUS CClient::OnConnect()
 {
-	*ppSendBuffer = &_crc;
-	return sizeof(_crc);
-}
-
-BOOL CClient::OnConnect(ULONG dwError)
-{
-	DbgPrint("%hs<%p>(%x)\r\n", __FUNCTION__, this, dwError);
-	PostMessageW(_hwndDlg, VBmp::e_connected, dwError, 0);
-	return !dwError;
+	DbgPrint("%hs<%p>\r\n", __FUNCTION__, this);
+	PostMessageW(_hwndDlg, VBmp::e_connected, 0, 1);
+	return 0;
 }
 
 void CClient::OnDisconnect()
@@ -89,40 +82,18 @@ void CClient::OnDisconnect()
 	DbgPrint("%hs<%p>\r\n", __FUNCTION__, this);
 	if (_vid) _vid->Release(), _vid = 0;
 	PostMessageW(_hwndDlg, VBmp::e_disconnected, 0, 0);
-	__super::OnDisconnect();
 }
 
-BOOL CClient::OnRecv(PSTR Buffer, ULONG cb)
-{
-	if (InterlockedExchange64(&_crc, 0))
-	{
-		if (InitSession((PBYTE)Buffer, cb))
-		{
-			DbgPrint("client: !! InitSession !!\r\n");
-			PostMessageW(_hwndDlg, VBmp::e_connected, 0, 1);
-			return TRUE;
-		}
-
-		return FALSE;
-	}
-
-	return __super::OnRecv(Buffer, cb);
-}
-
-BOOL CClient::OnUserData(ULONG type, PBYTE pb, ULONG cb)
+NTSTATUS CClient::OnUserData(ULONG type, PBYTE pb, ULONG cb)
 {
 	if ('H264' != type) DbgPrint("%hs<%p>(%.4hs %x)\r\n", __FUNCTION__, this, &type, cb);
 
 	switch (type)
 	{
-	case 'PING':
-		SetDisconnectTime(15000);
-		return TRUE;
-
 	case 'fmts':
 		if (ValidateFormats(pb, cb, TRUE))
 		{
-			return PostMessageW(_hwndDlg, VBmp::e_list, cb, (LPARAM)pb);
+			return PostMessageW(_hwndDlg, VBmp::e_list, cb, (LPARAM)pb) ? S_OK : E_FAIL;
 		}
 		break;
 
@@ -134,7 +105,7 @@ BOOL CClient::OnUserData(ULONG type, PBYTE pb, ULONG cb)
 			_vid->Release();
 			_vid = 0;
 		}
-		return TRUE;
+		return S_OK;
 
 	case 'H264':
 		_cbData += cb;
@@ -143,15 +114,13 @@ BOOL CClient::OnUserData(ULONG type, PBYTE pb, ULONG cb)
 		case '2YUY':
 			if (S_OK == OnFrame((PULONG)_vid->GetBits(), pb, cb))
 			{
-				PostMessageW(_hwnd, VBmp::e_update, 0, 0);
-				return TRUE;
+				return PostMessageW(_hwnd, VBmp::e_update, 0, 0) ? S_OK : E_FAIL;
 			}
-			break;
+			return S_OK;
 		}
-		return FALSE;
 	}
 
-	return FALSE;
+	return STATUS_BAD_DATA;
 }
 
 BOOL CClient::Start(VBmp* vid, ULONG biCompression, ULONG i, ULONG j)
@@ -167,8 +136,8 @@ BOOL CClient::Start(VBmp* vid, ULONG biCompression, ULONG i, ULONG j)
 
 	SendMessageW(_hwnd, VBmp::e_set, 0, (LPARAM)vid);
 
-	SELECT s = { i, j};
-	if (SendUserData('strt', &s, sizeof(s)))
+	SELECT s = { i, j };
+	if (SendUserData('strt', (PBYTE)&s, sizeof(s)))
 	{
 		SendMessageW(_hwnd, VBmp::e_set, 0, 0);
 		_vid = 0;
@@ -178,84 +147,43 @@ BOOL CClient::Start(VBmp* vid, ULONG biCompression, ULONG i, ULONG j)
 	return TRUE;
 }
 
-NTSTATUS GetKeyCrc(BCRYPT_KEY_HANDLE hKey, PULONGLONG pcrc)
+NTSTATUS CClient::Accept(PSOCKADDR_INET /*psi*/)
 {
-	NTSTATUS status;
-	PBYTE pb = 0;
-	ULONG cb = 0;
-	while(0 <= (status = BCryptExportKey(hKey, 0, BCRYPT_RSAPUBLIC_BLOB, pb, cb, &cb, 0)))
-	{
-		if (pb)
-		{
-			*pcrc = RtlCrc64(pb, cb, 0);
-			break;
-		}
-
-		pb = (PBYTE)alloca(cb);
-	}
-
-	return status;
+	return STATUS_CONNECTION_REFUSED;
 }
 
-NTSTATUS CClient::OpenKey(PCWSTR name)
+class TClientServerR : public CClientServerR
 {
-	PBYTE pb;
-	ULONG cb;
-
-	if (32 != wcslen(name))
+	virtual Endpoint* CreateEndpoint()
 	{
-		return STATUS_OBJECT_NAME_INVALID;
+		return 0;
 	}
+public:
+	using CClientServerR::CClientServerR;
+};
 
-	NTSTATUS status = ReadFromFile(name, &pb, &cb, 0x80, 0x800);
-	if (0 <= status)
+BOOL CreateClient(CClient** ppcln, HWND hwndDlg, HWND hwnd)
+{
+	BOOL fOk = FALSE;
+	if (CClientServerR* c = new TClientServerR(0, 0, "client"))
 	{
-		BCRYPT_KEY_HANDLE hKey = 0;
-		BCRYPT_ALG_HANDLE hAlgorithm;
-		if (0 <= (status = BCryptOpenAlgorithmProvider(&hAlgorithm, BCRYPT_RSA_ALGORITHM, 0, 0)))
-		{
-			status = BCryptImportKeyPair(hAlgorithm, 0, BCRYPT_RSAPRIVATE_BLOB, &hKey, pb, cb, 0);
-			BCryptCloseAlgorithmProvider(hAlgorithm, 0);
-		}
+		SOCKADDR_INET sa{};
+		sa.Ipv4.sin_family = AF_INET;
 
-		delete [] pb;
-
-		if (0 <= status)
+		if (c->Start(4, &sa))
 		{
-			ULONGLONG crc;
-			if (0 <= (status = GetKeyCrc(hKey, &crc)))
+			if (CClient* pcln = new CClient(c, hwndDlg, hwnd))
 			{
-				if (_wcstoui64(name + 16, const_cast<WCHAR**>(&name), 16) == crc && !*name)
-				{
-					SetKey(hKey), _crc = crc;
+				*ppcln = pcln;
 
-					return STATUS_SUCCESS;
-				}
-
-				status = STATUS_BAD_KEY;
+				fOk = TRUE;
 			}
-
-			BCryptDestroyKey(hKey);
 		}
+
+		c->Release();
 	}
-
-	return status;
-}
-
-BOOL StartClient(CClient** ppcln, HWND hwndDlg, HWND hwnd)
-{
-	if (CClient* pcln = new CClient(hwndDlg, hwnd))
-	{
-		if (!pcln->Create(1920*1080*4*2))//
-		{
-			*ppcln = pcln;
-
-			return TRUE;
-		}
-		pcln->Release();
-	}
-
-	return FALSE;
+	
+	return fOk;
 }
 
 _NT_END

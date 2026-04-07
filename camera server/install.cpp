@@ -103,17 +103,19 @@ HRESULT UnInstallService()
 	return logError("OpenSCManager");
 }
 
-HRESULT InstallService()
+HRESULT InstallService(ULONG64 crc2, ULONG64 crc1)
 {
 	HRESULT hr = E_OUTOFMEMORY;
 
 	if (PWSTR lpBinaryPathName = new WCHAR[MAXSHORT + 1])
 	{
-		if (ULONG cch = GetModuleFileNameW((HMODULE)&__ImageBase, lpBinaryPathName + 1, MAXUSHORT - 4))
+		ULONG cch = GetModuleFileNameW((HMODULE)&__ImageBase, lpBinaryPathName + 1, MAXUSHORT - 38);
+		if (!(hr = GetLastHresult()))
 		{
 			DbgPrint("InstallService(%ws)...\r\n", lpBinaryPathName + 1);
-			*lpBinaryPathName = '\"', lpBinaryPathName[cch + 1] = '\"', 
-				lpBinaryPathName[cch + 2] = '\n', lpBinaryPathName[cch + 3] = 0;
+			*lpBinaryPathName = '\"';
+
+			swprintf_s(lpBinaryPathName + cch + 1, 37, L"\" \n%I64x\n%I64x", crc2, crc1);
 
 			if (SC_HANDLE scm = OpenSCManagerW(0, 0, SC_MANAGER_CREATE_SERVICE))
 			{

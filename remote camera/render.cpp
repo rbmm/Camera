@@ -49,7 +49,7 @@ class YCameraWnd : public ZWnd
 
 	~YCameraWnd()
 	{
-		DbgPrint("%s<%p>\n", __FUNCTION__, this);
+		DbgPrint("%hs<%p>\n", __FUNCTION__, this);
 	}
 
 	void Set(VBmp* vid);

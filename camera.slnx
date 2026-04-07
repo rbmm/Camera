@@ -3,7 +3,7 @@
     <BuildType Name="Release" />
     <Platform Name="x64" />
   </Configurations>
-  <Project Path="camera\camera.vcxproj"               Id="B1113271-ea18-5C02-AD48-4CB18912B063" />
-  <Project Path="remote camera\remote camera.vcxproj" Id="92700661-23ab-177A-6E84-CB768FA398D5" />
-  <Project Path="camera server\camera server.vcxproj" Id="243B6ACD-69e4-40DB-17D3-5DD67A26FD79" />
+  <Project Path="camera server\camera server.vcxproj" Id="243b6acd-69e4-40db-17d3-5dd67a26fd79" />
+  <Project Path="camera\camera.vcxproj" Id="b1113271-ea18-5c02-ad48-4cb18912b063" />
+  <Project Path="remote camera\remote camera.vcxproj" Id="92700661-23ab-177a-6e84-cb768fa398d5" />
 </Solution>

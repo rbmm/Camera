@@ -40,18 +40,18 @@
       <EntryPointSymbol>ep</EntryPointSymbol>
       <AdditionalOptions>/EMITPOGOPHASEINFO /EMITVOLATILEMETADATA:NO %(AdditionalOptions)</AdditionalOptions>
       <AdditionalDependencies Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">asio.lib;ntver.lib;cfgmgr32.lib;bcrypt.lib;ws2_32.lib;mswsock.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalDependencies Condition="'$(Configuration)|$(Platform)'=='Release|x64'">asio.lib;ntver.lib;cfgmgr32.lib;bcrypt.lib;ws2_32.lib;mswsock.lib;Mfplat.lib;ole32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies Condition="'$(Configuration)|$(Platform)'=='Release|x64'">asio.lib;ntver.lib;cfgmgr32.lib;bcrypt.lib;ws2_32.lib;mswsock.lib;Mfplat.lib;ole32.lib;detour.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="H264.cpp" />
     <ClCompile Include="mf.cpp" />
     <ClCompile Include="SvcBase.cpp" />
+    <ClCompile Include="TUDP.cpp" />
     <ClCompile Include="utils.cpp" />
     <ClInclude Include="compressor.h" />
     <ClInclude Include="file.h" />
     <ClInclude Include="H264.h" />
-    <ClInclude Include="https.h" />
     <ClInclude Include="log.h" />
     <ClInclude Include="read.h" />
     <ClInclude Include="resource.h" />
@@ -59,7 +59,6 @@
     <ClInclude Include="stdafx.h" />
     <ClCompile Include="ep.cpp" />
     <ClCompile Include="file.cpp" />
-    <ClCompile Include="https.cpp" />
     <ClCompile Include="install.cpp" />
     <ClCompile Include="key.cpp" />
     <ClCompile Include="log.cpp" />
@@ -69,6 +68,8 @@
       <PrecompiledHeader>Create</PrecompiledHeader>
     </ClCompile>
     <ClInclude Include="SvcBase.h" />
+    <ClInclude Include="TUDP.h" />
+    <ClInclude Include="userendp.h" />
     <ClInclude Include="utils.h" />
   </ItemGroup>
   <ItemGroup>

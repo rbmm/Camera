@@ -2,10 +2,10 @@
 
 _NT_BEGIN
 #include "log.h"
-#include "https.h"
 #include "read.h"
 #include "server.h"
 #include "utils.h"
+#include "userendp.h"
 
 PWSTR GetStringsEnd(PWSTR psz)
 {
@@ -290,231 +290,202 @@ void PrintIP(SOCKADDR_INET* from)
 	}
 }
 
-class CServer : public CEncTcp
+//////////////////////////////////////////////////////////////////////////
+
+NTSTATUS CEncTcp::Stop()
 {
-	using CEncTcp::CEncTcp;
-
-	PWSTR _M_buf = 0;
-	KsRead* _pin = 0;
-	HANDLE _hThreadId = (HANDLE)GetCurrentThreadId();
-
-	BOOL Stop()
+	if (_pin)
 	{
-		if (_pin)
-		{
-			_pin->Stop();
-			_pin->Release();
-			_pin = 0;
-			return TRUE;
-		}
-
-		return FALSE;
+		_pin->Stop();
+		_pin->Release();
+		_pin = 0;
+		return S_OK;
 	}
 
-	BOOL Start(PWSTR pszDeviceInterface, PKS_DATARANGE_VIDEO pDRVideo)
-	{
-		if (HANDLE hFile = fixH(CreateFileW(pszDeviceInterface, 0, 0, 0, OPEN_EXISTING, 0, 0)))
-		{
-			NTSTATUS status = STATUS_NO_MEMORY;
-
-			KsRead* pin = 0;
-			if (H264 * p264 = new H264(this))
-			{
-				if (0 <= (status = p264->Init(
-					pDRVideo->VideoInfoHeader.bmiHeader.biWidth,
-					pDRVideo->VideoInfoHeader.bmiHeader.biHeight,
-					pDRVideo->DataRange.SampleSize,
-					pDRVideo->VideoInfoHeader.AvgTimePerFrame)))
-				{
-					if (!(pin = new KsRead(p264)))
-					{
-						status = STATUS_NO_MEMORY;
-					}
-				}
-				p264->Release();
-			}
-
-			if (pin)
-			{
-				status = pin->Create(hFile, pDRVideo);
-			}
-
-			NtClose(hFile);
-
-			if (0 <= status)
-			{
-				if (0 <= (status = pin->SetState(KSSTATE_RUN)))
-				{
-					_pin = pin;
-					pin->Start();
-					return TRUE;
-				}
-
-				pin->Release();
-			}
-		}
-
-		return FALSE;
-	}
-
-	BOOL Refresh()
-	{
-		BOOL fOk = FALSE;
-
-		if (_M_buf)
-		{
-			delete [] _M_buf;
-			_M_buf = 0;
-		}
-
-		ULONG cb = 0x10000, cb2 = 0x1000;
-
-		if (PBYTE buf = new UCHAR[cb])
-		{
-			if (PBYTE buf2 = new UCHAR[cb2])
-			{
-				PBYTE pb2 = buf2;
-
-				if (PBYTE pb = CreateInfo(buf, cb, &cb, &pb2, cb2, &cb2, const_cast<GUID*>(&KSCATEGORY_VIDEO_CAMERA)))
-				{
-					_M_buf = (PWSTR)buf, buf = 0;
-
-					fOk = TRUE;
-					SendUserData('fmts', buf2, RtlPointerToOffset(buf2, pb2));
-				}
-
-				delete [] buf2;
-			}
-			delete [] buf;
-		}
-
-		return fOk;
-	}
-
-	virtual ~CServer()
-	{
-		DbgPrint("%hs<%p>\r\n", __FUNCTION__, this);
-		if (_M_buf)
-		{
-			delete [] _M_buf;
-			_M_buf = 0;
-		}
-		Stop();
-		ZwAlertThreadByThreadId(_hThreadId);
-	}
-
-	virtual BOOL OnConnect(ULONG dwError, PSTR Buffer, ULONG cbTransferred)
-	{
-		DbgPrint("%hs<%p>(%x)\r\n", __FUNCTION__, this, dwError);
-
-		switch (dwError)
-		{
-		case NOERROR:
-			PrintIP((SOCKADDR_INET*)&m_RemoteAddr);
-			if (sizeof(ULONGLONG) == cbTransferred && S_OK == InitSession(*(ULONGLONG*)Buffer))
-			{
-				DbgPrint("%hs<%p> !! OK !!\r\n", __FUNCTION__, this);
-				SetDisconnectTime(15000);
-				return 0 <= SetTimer(4000);
-			}
-		}
-
-		return FALSE;
-	}
-
-	virtual BOOL OnConnect(ULONG /*dwError*/)
-	{
-		__debugbreak();
-		return FALSE;
-	}
-
-	virtual void OnDisconnect()
-	{
-		DbgPrint("%hs<%p>\r\n", __FUNCTION__, this);
-		Stop();
-
-		if (_M_buf)
-		{
-			delete [] _M_buf;
-			_M_buf = 0;
-		}
-
-		__super::OnDisconnect();
-
-		if (!_G_stop) Listen(sizeof(ULONGLONG));
-	}
-
-	virtual BOOL OnUserData(ULONG type, PBYTE pb, ULONG cb)
-	{
-		switch (type)
-		{
-		case 'PING':
-			SetDisconnectTime(15000);
-			return TRUE;
-
-		case 'strt':
-			DbgPrint("%hs<%p>( start )\r\n", __FUNCTION__, this);
-			if (!_pin && _M_buf && sizeof(SELECT) == cb )
-			{
-				PWSTR pszDeviceInterface;
-				if (PKS_DATARANGE_VIDEO pDRVideo = GetFormatInfo(&pszDeviceInterface, _M_buf, 
-					reinterpret_cast<SELECT*>(pb)->i, reinterpret_cast<SELECT*>(pb)->j))
-				{
-					DbgPrint("%ws\r\n%.4hs [%u x %u] %I64u FPS\r\n", 
-						pszDeviceInterface, 
-						&pDRVideo->VideoInfoHeader.bmiHeader.biCompression,
-						pDRVideo->VideoInfoHeader.bmiHeader.biWidth,
-						pDRVideo->VideoInfoHeader.bmiHeader.biHeight,
-						10000000/pDRVideo->VideoInfoHeader.AvgTimePerFrame);
-
-					//pDRVideo->VideoInfoHeader.AvgTimePerFrame = pDRVideo->ConfigCaps.MaxFrameInterval;
-
-					return Start(pszDeviceInterface, pDRVideo);
-				}
-			}
-			return FALSE;
-
-		case 'stop':
-			DbgPrint("%hs<%p>( stop )\r\n", __FUNCTION__, this);
-			return Stop();
-
-		case 'init':
-			DbgPrint("%hs<%p>( init )\r\n", __FUNCTION__, this);
-			return Refresh();
-		}
-
-		DbgPrint("%hs<%p>(%.4hs %p %x)\r\n", __FUNCTION__, this, &type, pb, cb);
-		return FALSE;
-	}
-public:
-	void OnStop();
-};
-
-void CServer::OnStop()
-{
-	SendUserData('stop');
+	return E_FAIL;
 }
 
-BOOL StartServer()
+NTSTATUS CEncTcp::Start(PWSTR pszDeviceInterface, PKS_DATARANGE_VIDEO pDRVideo)
+{
+	if (HANDLE hFile = fixH(CreateFileW(pszDeviceInterface, 0, 0, 0, OPEN_EXISTING, 0, 0)))
+	{
+		NTSTATUS status = STATUS_NO_MEMORY;
+
+		KsRead* pin = 0;
+		if (H264* p264 = new H264(this))
+		{
+			if (0 <= (status = p264->Init(
+				pDRVideo->VideoInfoHeader.bmiHeader.biWidth,
+				pDRVideo->VideoInfoHeader.bmiHeader.biHeight,
+				pDRVideo->DataRange.SampleSize,
+				pDRVideo->VideoInfoHeader.AvgTimePerFrame)))
+			{
+				if (!(pin = new KsRead(p264)))
+				{
+					status = STATUS_NO_MEMORY;
+				}
+			}
+			p264->Release();
+		}
+
+		if (pin)
+		{
+			status = pin->Create(hFile, pDRVideo);
+		}
+
+		NtClose(hFile);
+
+		if (0 <= status)
+		{
+			if (0 <= (status = pin->SetState(KSSTATE_RUN)))
+			{
+				_pin = pin;
+				pin->Start();
+				return S_OK;
+			}
+
+			pin->Release();
+		}
+	}
+
+	return E_FAIL;
+}
+
+NTSTATUS CEncTcp::Refresh()
+{
+	NTSTATUS status = E_FAIL;
+
+	if (_M_buf)
+	{
+		delete[] _M_buf;
+		_M_buf = 0;
+	}
+
+	ULONG cb = 0x10000, cb2 = 0x1000;
+
+	if (PBYTE buf = new UCHAR[cb])
+	{
+		if (PBYTE buf2 = new UCHAR[cb2])
+		{
+			PBYTE pb2 = buf2;
+
+			if (PBYTE pb = CreateInfo(buf, cb, &cb, &pb2, cb2, &cb2, const_cast<GUID*>(&KSCATEGORY_VIDEO_CAMERA)))
+			{
+				_M_buf = (PWSTR)buf, buf = 0;
+
+				status = S_OK;
+				SendUserData('fmts', buf2, RtlPointerToOffset(buf2, pb2));
+			}
+
+			delete[] buf2;
+		}
+		delete[] buf;
+	}
+
+	return status;
+}
+
+NTSTATUS CEncTcp::Accept(PSOCKADDR_INET /*psi*/)
+{
+	DbgPrint("%hs<%p>\r\n", __FUNCTION__, this);
+	return 0;
+}
+
+NTSTATUS CEncTcp::OnConnect()
+{
+	DbgPrint("%hs<%p>\r\n", __FUNCTION__, this);
+
+	return 0;
+}
+
+void CEncTcp::OnDisconnect()
+{
+	DbgPrint("%hs<%p>\r\n", __FUNCTION__, this);
+	Stop();
+
+	if (_M_buf)
+	{
+		delete[] _M_buf;
+		_M_buf = 0;
+	}
+}
+
+NTSTATUS CEncTcp::OnUserData(ULONG type, PBYTE pb, ULONG cb)
+{
+	switch (type)
+	{
+	case 'strt':
+		DbgPrint("%hs<%p>( start )\r\n", __FUNCTION__, this);
+		if (!_pin && _M_buf && sizeof(SELECT) == cb)
+		{
+			PWSTR pszDeviceInterface;
+			if (PKS_DATARANGE_VIDEO pDRVideo = GetFormatInfo(&pszDeviceInterface, _M_buf,
+				reinterpret_cast<SELECT*>(pb)->i, reinterpret_cast<SELECT*>(pb)->j))
+			{
+				DbgPrint("%ws\r\n%.4hs [%u x %u] %I64u FPS\r\n",
+					pszDeviceInterface,
+					&pDRVideo->VideoInfoHeader.bmiHeader.biCompression,
+					pDRVideo->VideoInfoHeader.bmiHeader.biWidth,
+					pDRVideo->VideoInfoHeader.bmiHeader.biHeight,
+					10000000 / pDRVideo->VideoInfoHeader.AvgTimePerFrame);
+
+				return Start(pszDeviceInterface, pDRVideo);
+			}
+		}
+		return FALSE;
+
+	case 'stop':
+		DbgPrint("%hs<%p>( stop )\r\n", __FUNCTION__, this);
+		return Stop();
+
+	case 'init':
+		DbgPrint("%hs<%p>( init )\r\n", __FUNCTION__, this);
+		return Refresh();
+	}
+
+	DbgPrint("%hs<%p>(%.4hs %p %x)\r\n", __FUNCTION__, this, &type, pb, cb);
+	return STATUS_INVALID_DEVICE_REQUEST;
+}
+
+CEncTcp::~CEncTcp()
+{
+	DbgPrint("%hs<%p>\r\n", __FUNCTION__, this);
+	if (_M_buf)
+	{
+		delete[] _M_buf;
+		_M_buf = 0;
+	}
+	Stop();
+}
+
+class TClientServerR : public CClientServerR
+{
+	virtual Endpoint* CreateEndpoint()
+	{
+		return new CEncTcp(this);
+	}
+public:
+	using CClientServerR::CClientServerR;
+};
+
+BOOL StartServer(ULONG64 crc2, ULONG64 crc1)
 {
 	BOOL fOk = FALSE;
 
 	ULONG err = NOERROR;
 
-	if (CSocketObject* pAddress = new CSocketObject)
+	if (CClientServerR* s = new TClientServerR(crc2, crc1, "server"))
 	{
-		if (!(err = pAddress->CreateAddress(0x3333)))
+		SOCKADDR_INET sa{};
+		sa.Ipv4.sin_family = AF_INET;
+		sa.Ipv4.sin_port = 0x3333;
+
+		if (fOk = s->Start(4, &sa))
 		{
-			if (CServer* psrv = new CServer(pAddress))
-			{
-				if (!(err = psrv->Create(0x1000)))
-				{
-					fOk = !(err = psrv->Listen(sizeof(ULONGLONG)));
-				}
-				psrv->Release();
-			}
+			s->SetTimer(4000);
 		}
-		pAddress->Release();
+
+		s->Release();
 	}
 
 	if (err)

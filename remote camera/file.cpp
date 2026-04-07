@@ -5,13 +5,6 @@ _NT_BEGIN
 #include "log.h"
 #include "file.h"
 
-HRESULT GetLastHresult(ULONG dwError = GetLastError())
-{
-	NTSTATUS status = RtlGetLastNtStatus();
-
-	return RtlNtStatusToDosErrorNoTeb(status) == dwError ? HRESULT_FROM_NT(status) : HRESULT_FROM_WIN32(dwError);
-}
-
 PWSTR IsRegExpandSz(PKEY_VALUE_PARTIAL_INFORMATION_ALIGN64 pkvpi)
 {
 	ULONG DataLength = pkvpi->DataLength;

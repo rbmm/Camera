@@ -4,17 +4,12 @@ _NT_BEGIN
 #include "log.h"
 #include "H264.h"
 
-class CServer : public CEncTcp
-{
-public:
-	void OnStop();
-};
-
-void H264::Stop()
+void H264::Stop(bool bDisconnect)
 {
 	_M_encoder->ProcessMessage(MFT_MESSAGE_NOTIFY_END_OF_STREAM, 0);
-	static_cast<CServer*>(_pTarget)->OnStop();
-	_pTarget->Disconnect();
+	_M_encoder->ProcessMessage(MFT_MESSAGE_COMMAND_FLUSH, 0);
+	_pTarget->OnStop();
+	if (bDisconnect) _pTarget->Disconnect();
 }
 
 H264::~H264()

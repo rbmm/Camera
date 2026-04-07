@@ -34,7 +34,7 @@
     <ClCompile>
       <WarningLevel>Level4</WarningLevel>
       <FunctionLevelLinking>true</FunctionLevelLinking>
-      <Optimization>MaxSpeed</Optimization>
+      <Optimization>Disabled</Optimization>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -50,12 +50,12 @@
   <ItemGroup>
     <ClCompile Include="H264.cpp" />
     <ClCompile Include="key.cpp" />
+    <ClCompile Include="TUDP.cpp" />
     <ClCompile Include="utils.cpp" />
     <ClCompile Include="video.cpp" />
     <ClInclude Include="client.h" />
     <ClInclude Include="file.h" />
     <ClInclude Include="H264.h" />
-    <ClInclude Include="https.h" />
     <ClInclude Include="log.h" />
     <ClInclude Include="msgbox.h" />
     <ClInclude Include="resource.h" />
@@ -63,13 +63,13 @@
     <ClCompile Include="client.cpp" />
     <ClCompile Include="ep.cpp" />
     <ClCompile Include="file.cpp" />
-    <ClCompile Include="https.cpp" />
     <ClCompile Include="log.cpp" />
     <ClCompile Include="msgbox.cpp" />
     <ClCompile Include="render.cpp" />
     <ClCompile Include="stdafx.cpp">
       <PrecompiledHeader>Create</PrecompiledHeader>
     </ClCompile>
+    <ClInclude Include="TUDP.h" />
     <ClInclude Include="utils.h" />
     <ClInclude Include="video.h" />
   </ItemGroup>

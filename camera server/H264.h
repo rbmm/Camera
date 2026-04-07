@@ -1,6 +1,6 @@
 #pragma once
 
-#include "https.h"
+#include "userendp.h"
 
 class H264 : public IMFAsyncCallback
 {
@@ -69,7 +69,7 @@ public:
 
 	HRESULT Init(LONG cx, LONG cy, ULONG cbFrame, _In_ REFERENCE_TIME AvgTimePerFrame);
 
-	void Stop();
+	void Stop(bool bDisconnect = true);
 
 	H264(CEncTcp* pTarget) : _pTarget(pTarget)
 	{

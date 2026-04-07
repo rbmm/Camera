@@ -8,10 +8,88 @@ _NT_BEGIN
 #include "dump.h"
 #include "read.h"
 
+void YUY2ToI420(ULONG width, ULONG height, _In_ const BYTE* yuy2, _Out_ BYTE* i420)
+{
+	ULONG h = 0;
+	// Y-плоскость занимает width * height
+	PBYTE y_plane = i420;
+	// U-плоскость начинаетс€ сразу после Y (размер: width * height / 4)
+	PBYTE u_plane = i420 + (width * height);
+	// V-плоскость начинаетс€ после U (размер: width * height / 4)
+	PBYTE v_plane = i420 + (width * height) + (width * height / 4);
+
+	do
+	{
+		ULONG uv_width = width / 2;
+		do
+		{
+			union {
+				ULONG u;
+				struct {
+					UCHAR y0, u_val, y1, v_val; // —труктура YUY2: [Y0 U Y1 V]
+				};
+			};
+
+			u = *((ULONG*&)yuy2)++;
+
+			// «аписываем €ркость в Y-плоскость
+			*y_plane++ = y0;
+			*y_plane++ = y1;
+
+			// «аписываем цветность только дл€ каждой второй строки (4:2:0)
+			if (!(1 & h))
+			{
+				*u_plane++ = u_val;
+				*v_plane++ = v_val;
+			}
+
+		} while (--uv_width);
+
+	} while (h++, --height);
+}
+
 void KsRead::PushFrame(PVOID Frame)
 {
-	DbgPrint("<<[%x]\r\n", GetFrameNumber(Frame));
+	//DbgPrint("<<[%x]\r\n", GetFrameNumber(Frame));
 	InterlockedPushEntrySList(&_head, (PSLIST_ENTRY)Frame);
+}
+//#undef DbgPrint
+
+#define CASE(x) case NAL_UNIT_ ## x: return #x;
+
+PCSTR GetNalType(uint32_t type)
+{
+	switch (type)
+	{
+		CASE(CODED_SLICE_TRAIL_N);
+		CASE(CODED_SLICE_TRAIL_R);
+		CASE(CODED_SLICE_TSA_N);
+		CASE(CODED_SLICE_TSA_R);
+		CASE(CODED_SLICE_STSA_N);
+		CASE(CODED_SLICE_STSA_R);
+		CASE(CODED_SLICE_RADL_N);
+		CASE(CODED_SLICE_RADL_R);
+		CASE(CODED_SLICE_RASL_N);
+		CASE(CODED_SLICE_RASL_R);
+		CASE(CODED_SLICE_BLA_W_LP);
+		CASE(CODED_SLICE_BLA_W_RADL);
+		CASE(CODED_SLICE_BLA_N_LP);
+		CASE(CODED_SLICE_IDR_W_RADL);
+		CASE(CODED_SLICE_IDR_N_LP);
+		CASE(CODED_SLICE_CRA);
+		CASE(VPS);
+		CASE(SPS);
+		CASE(PPS);
+		CASE(ACCESS_UNIT_DELIMITER);
+		CASE(EOS);
+		CASE(EOB);
+		CASE(FILLER_DATA);
+		CASE(PREFIX_SEI);
+		CASE(SUFFIX_SEI);
+		CASE(UNSPECIFIED);
+		CASE(INVALID);
+	}
+	return "***";
 }
 
 void KsRead::OnReadComplete(KS_HEADER_AND_INFO* SHGetImage)
@@ -20,16 +98,51 @@ void KsRead::OnReadComplete(KS_HEADER_AND_INFO* SHGetImage)
 	PVOID Frame = SHGetImage->Data;
 	InterlockedExchangeAddSizeTNoFence(&_Bytes, DataUsed);
 
-	DbgPrint("ReadComplete(Frame<%x> %x(%I64x) [%I64x] %x)\r\n", GetFrameNumber(Frame), 
-		DataUsed, _Bytes, SHGetImage->FrameCompletionNumber, SHGetImage->OptionsFlags);
+	//DbgPrint("ReadComplete(Frame<%x> %x(%I64x) [%I64x] %x)\r\n", GetFrameNumber(Frame), 
+	//	DataUsed, _Bytes, SHGetImage->FrameCompletionNumber, SHGetImage->OptionsFlags);
 
 	Read();
 
 	switch (biCompression)
 	{
 	case '2YUY':
-		YUY2toRGBA((PBYTE)Frame, (PULONG)_vid->GetBits(), biWidth, biHeight);
-		PostMessageW(_hwnd, VBmp::e_update, 0, 0);
+		if (DataUsed == biSizeImage)
+		{
+			YUY2toRGBA((PBYTE)Frame, (PULONG)_vid->GetBits(), biWidth, biHeight);
+			PostMessageW(_hwnd, VBmp::e_update, 0, 0);
+
+			YUY2ToI420(biWidth, biHeight, (PBYTE)Frame, m_i420);
+
+			union {
+				FILETIME ft;
+				int64_t pts;
+			};
+
+			GetSystemTimeAsFileTime(&ft);
+			m_pic->pts = pts;
+
+			uint32_t i_nal = 0;
+			x265_nal* p_nal = 0;
+
+			AcquireSRWLockExclusive(&m_lock);
+
+			if (0 > x265_encoder_encode(m_encoder, &p_nal, &i_nal, m_pic, 0))
+			{
+				__debugbreak();
+				break;
+			}
+
+			if (i_nal)
+			{
+				do
+				{
+					DbgPrint("%hs %x\r\n", GetNalType(p_nal->type), p_nal->sizeBytes);
+				} while (p_nal++, --i_nal);
+			}
+
+			ReleaseSRWLockExclusive(&m_lock);
+		}
+
 		break;
 	default:
 		if (PVOID buf = _vid->GetBuf())
@@ -50,9 +163,9 @@ void KsRead::IOCompletionRoutine(CDataPacket* , DWORD Code, NTSTATUS status, ULO
 {
 	ULONG64 Time = GetTickCount64();
 
-	DbgPrint("[%u / %u | %u]:IOCompletionRoutine<%.4hs>(%x, %x)\r\n", 
-		InterlockedIncrementNoFence(&_nReadCount), (ULONG)(Time - _StartTime), (ULONG)(Time - _LastCompleteTime), 
-		&Code, status, dwNumberOfBytesTransfered);
+	//DbgPrint("[%u / %u | %u]:IOCompletionRoutine<%.4hs>(%x, %x)\r\n", 
+	//	InterlockedIncrementNoFence(&_nReadCount), (ULONG)(Time - _StartTime), (ULONG)(Time - _LastCompleteTime), 
+	//	&Code, status, dwNumberOfBytesTransfered);
 
 	_LastCompleteTime = Time;
 	
@@ -87,11 +200,15 @@ KsRead::~KsRead()
 	_vid->Release();
 	PostMessageW(_hwnd, VBmp::e_set, 0, 0);
 	DbgPrint("%hs<%p>\r\n", __FUNCTION__, this);
+
+	if (m_encoder) x265_encoder_close(m_encoder);
+	if (m_pic) x265_picture_free(m_pic);
+	if (m_i420) delete [] m_i420;
 }
 
 void KsRead::Read(PVOID Data)
 {
-	DbgPrint("read to(Frame<%x>)\r\n", GetFrameNumber(Data));
+	// DbgPrint("read to(Frame<%x>)\r\n", GetFrameNumber(Data));
 
 	if (NT_IRP* Irp = new(sizeof(KS_HEADER_AND_INFO)) NT_IRP(this, op_read, 0))
 	{
@@ -199,6 +316,77 @@ NTSTATUS KsRead::GetState(PKSSTATE state)
 	return status;
 }
 
+x265_encoder* Init265(_In_ PKS_VIDEOINFOHEADER VideoInfoHeader, _In_ PBYTE y_plane, _Out_ x265_picture** ppic)
+{
+	if (x265_param* param = x265_param_alloc())
+	{
+		x265_param_default_preset(param, "ultrafast", "zerolatency");
+		param->fpsNum = 10000000, param->fpsDenom = (uint32_t)VideoInfoHeader->AvgTimePerFrame;
+		param->sourceWidth = VideoInfoHeader->bmiHeader.biWidth;
+		param->sourceHeight = VideoInfoHeader->bmiHeader.biHeight;
+
+		param->internalCsp = X265_CSP_I420;
+		param->sourceWidth = VideoInfoHeader->bmiHeader.biWidth;
+		param->sourceHeight = VideoInfoHeader->bmiHeader.biHeight;
+
+		param->rc.rateControlMode = X265_RC_ABR;
+		param->rc.bitrate = 2048;
+		param->rc.vbvMaxBitrate = 4096;
+		param->rc.vbvBufferSize = 4096;
+		int fps = param->fpsDenom ? param->fpsNum / param->fpsDenom : 30;
+		param->keyframeMax = fps * 2;
+		param->keyframeMin = fps;
+		param->bIntraRefresh = 1; 
+
+		param->bAnnexB = 1;
+		param->bRepeatHeaders = 1;
+		param->logLevel = X265_LOG_FULL;
+
+		param->bEnableWavefront = 0;
+
+		param->bEnableSAO = 0; 
+		param->rc.cuTree = 0;
+		param->bEmitInfoSEI = 0;
+
+		if (x265_picture* pic = x265_picture_alloc())
+		{
+			x265_picture_init(param, pic);
+
+			if (x265_encoder* encoder = x265_encoder_open(param))
+			{
+				ULONG Width = param->sourceWidth;
+				ULONG cb = Width * param->sourceHeight;
+
+				PBYTE u_plane = y_plane + cb;
+				PBYTE v_plane = u_plane + (cb >> 2);
+
+				pic->colorSpace = X265_CSP_I420;
+				pic->sliceType = X265_TYPE_AUTO;
+
+				pic->planes[0] = y_plane;
+				pic->stride[0] = Width;
+
+				pic->planes[1] = u_plane; 
+				pic->stride[1] = Width >> 1;
+
+				pic->planes[2] = v_plane;
+				pic->stride[2] = Width >> 1;
+
+				*ppic = pic;
+
+				x265_param_free(param);
+
+				return encoder;
+			}
+			x265_picture_free(pic);
+		}
+
+		x265_param_free(param);
+	}
+
+	return 0;
+}
+
 #define IOCTL_KS_CUSTOM CTL_CODE(FILE_DEVICE_KS, 0x833, METHOD_OUT_DIRECT, FILE_READ_ACCESS)
 
 NTSTATUS KsRead::Create(_In_ HANDLE FilterHandle, _In_ PKS_DATARANGE_VIDEO pDRVideo, _Out_ MODE* mode)
@@ -228,7 +416,13 @@ NTSTATUS KsRead::Create(_In_ HANDLE FilterHandle, _In_ PKS_DATARANGE_VIDEO pDRVi
 		{
 			*static_cast<PKS_BITMAPINFOHEADER>(this) = pDRVideo->VideoInfoHeader.bmiHeader;
 
+			if (m_i420 = new BYTE[3 * biWidth * biHeight >> 1] )
+			{
+				m_encoder = Init265(&pDRVideo->VideoInfoHeader, m_i420, &m_pic);
+			}
+
 			memcpy(Data, pDRVideo, sizeof(KS_DATARANGE_VIDEO));
+
 			ULONG cb;
 			switch (status = SynchronousDeviceControl(hFile, IOCTL_KS_CUSTOM, 0, 0, Data, SamplesBufferSize, &cb))
 			{

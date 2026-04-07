@@ -6,6 +6,8 @@
 #include <wincodec.h  >
 #include <ShlObj_core.h >
 #include <ShObjIdl_core.h >
+
+#include "x265.h"
 _NT_BEGIN
 #include <cfgmgr32.h>
 

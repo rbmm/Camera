@@ -245,20 +245,37 @@ BOOL WCDlg::Connect(HWND hwndDlg)
 		return FALSE;
 	}
 
-	WCHAR name[34];
+	WCHAR name[34], *pc;
 	if (32 != GetDlgItemTextW(hwndDlg, ID_CRC, name, _countof(name)))
 	{
 		return FALSE;
 	}
 
-	NTSTATUS status = _pTarget->OpenKey(name);
-	if (0 <= status)
+	ULONG64 crc1 = _wcstoui64(name + 16, &pc, 16);
+
+	if (*pc)
 	{
-		if (!(status = _pTarget->Connect(_byteswap_ulong(ip), 0x3333)))
-		{
-			_bConnected = TRUE;
-			return TRUE;
-		}
+		return FALSE;
+	}
+
+	name[16] = 0;
+
+	ULONG64 crc2 = _wcstoui64(name, &pc, 16);
+
+	if (*pc)
+	{
+		return FALSE;
+	}
+
+	NTSTATUS status;
+	SOCKADDR_INET sa{};
+	sa.Ipv4.sin_family = AF_INET;
+	sa.Ipv4.sin_addr.S_un.S_addr = _byteswap_ulong(ip);
+	sa.Ipv4.sin_port = 0x3333;
+	if (!(status = _pTarget->Connect(&sa, crc2, crc1)))
+	{
+		_bConnected = TRUE;
+		return TRUE;
 	}
 
 	ShowErrorBox(hwndDlg, status, 0);
@@ -284,7 +301,6 @@ INT_PTR WCDlg::DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 		RemoveIcon(hwndDlg);
 		if (_pTarget) 
 		{
-			_pTarget->Close();
 			_pTarget->Release();
 		}
 		break;
@@ -323,13 +339,11 @@ INT_PTR WCDlg::DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 		}
 		else
 		{
-			EnableWindow(GetDlgItem(hwndDlg, lParam ? ID_REFRESH : ID_DISCONNECT), TRUE);
+			EnableWindow(GetDlgItem(hwndDlg, ID_DISCONNECT), TRUE);
+			EnableWindow(GetDlgItem(hwndDlg, ID_REFRESH), TRUE);
 
-			if (lParam)
-			{
-				_pTarget->GetFormats();
-				SetTimer(hwndDlg, 0, 1000, 0);
-			}
+			_pTarget->GetFormats();
+			SetTimer(hwndDlg, 0, 1000, 0);
 		}
 		return 0;
 
@@ -338,7 +352,7 @@ INT_PTR WCDlg::DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 		{
 			if (!(_N++ & 3))
 			{
-				_pTarget->SendUserData('PING');
+				_pTarget->ping();
 			}
 			if (_bVideo)
 			{
@@ -455,22 +469,6 @@ INT_PTR WCDlg::DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			_ft = SendMessageW(GetDlgItem(hwndDlg, ID_VIDEO), VBmp::e_save, uTryID, (LPARAM)GetDlgItem(hwndDlg, IDC_EDIT1));
 			break;
 		
-		case ID_LOG:
-			if (HWND hwnd = CreateWindowExW(0, WC_EDIT, L" [LOG] ", WS_OVERLAPPEDWINDOW|WS_VSCROLL|WS_HSCROLL|ES_MULTILINE,
-				CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, hwndDlg, 0, 0, 0))
-			{
-				ULONG n = 8;
-				SendMessage(hwnd, EM_SETTABSTOPS, 1, (LPARAM)&n);
-				SendMessage(hwnd, EM_LIMITTEXT, MAXLONG, 0);
-				if (_hfont)
-				{
-					SendMessage(hwnd, WM_SETFONT, (WPARAM)_hfont, 0);
-				}
-				_G_log >> hwnd;
-				_G_log.Init(0x100000);
-				ShowWindow(hwnd, SW_SHOWNORMAL);
-			}
-			break;
 		}
 		break;
 
@@ -540,7 +538,7 @@ void WCDlg::OnOk(HWND hwndDlg)
 	{
 		if (vid->Create(pf->biWidth, pf->biHeight))
 		{
-			if (0 <= _pTarget->Init(pf->biWidth, pf->biHeight))
+			if (0 <= _pTarget->H264::Init(pf->biWidth, pf->biHeight))
 			{
 				if (_pTarget->Start(vid, pf->biCompression, i, j))
 				{
@@ -656,7 +654,7 @@ BOOL WCDlg::AddCameras(HWND hwndDlg, PVOID buf, ULONG cb)
 
 BOOL WCDlg::OnInitDialog(HWND hwndDlg)
 {
-	if (!StartClient(&_pTarget, hwndDlg, GetDlgItem(hwndDlg, ID_VIDEO)))
+	if (!CreateClient(&_pTarget, hwndDlg, GetDlgItem(hwndDlg, ID_VIDEO)))
 	{
 		EndDialog(hwndDlg, 0);
 		return FALSE;
@@ -693,10 +691,11 @@ BOOL WCDlg::OnInitDialog(HWND hwndDlg)
 	return TRUE;
 }
 
+ULONG g_dwThreadId;
+
 void IO_RUNDOWN::RundownCompleted()
 {
-	destroyterm();
-	ExitProcess(0);
+	ZwAlertThreadByThreadId((HANDLE)(ULONG_PTR)g_dwThreadId);
 }
 
 class YCameraWnd
@@ -707,8 +706,6 @@ public:
 };
 
 NTSTATUS GenKeyXY();
-
-bool _G_stop = false;
 
 void CALLBACK ep(void*)
 {
@@ -724,20 +721,25 @@ void CALLBACK ep(void*)
 			WSADATA wd;
 			if (!WSAStartup(WINSOCK_VERSION, &wd))
 			{
-				_G_log.Init(0x10000);
+				g_dwThreadId = GetCurrentThreadId();
+
+				InitLog(L"rcamera.log");
 				WCDlg dlg;
 				dlg.DoModal((HINSTANCE)&__ImageBase, MAKEINTRESOURCEW(IDD_DIALOG1), 0, 0);
 
-				_G_stop = TRUE;
-
 				WSACleanup();
+
+				IO_RUNDOWN::g_IoRundown.BeginRundown();
+				ZwWaitForAlertByThreadId(0, 0);
 			}
 
 			CoUninitialize();
 		}
 		YCameraWnd::Unregister();
 	}
-	IO_RUNDOWN::g_IoRundown.BeginRundown();
+	
+	destroyterm();
+	ExitProcess(0);
 }
 
 _NT_END

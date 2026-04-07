@@ -1,46 +1,56 @@
 #pragma once
 
-class WLog
+HRESULT GetLastHresult(ULONG dwError = GetLastError());
+
+inline HRESULT GetLastHresult(BOOL fOk)
 {
-	PVOID _BaseAddress;
-	ULONG _MaxPtr, _Ptr;
+	return fOk ? S_OK : GetLastHresult();
+}
 
-	PWSTR _buf()
-	{
-		return (PWSTR)_BaseAddress + _Ptr;
-	}
+template <typename T> T HR(HRESULT& hr, T t)
+{
+	hr = t ? NOERROR : GetLastHresult(GetLastError());
+	return t;
+}
 
-	ULONG _cch()
-	{
-		return _MaxPtr - _Ptr;
-	}
-	SRWLOCK _lock = {};
+HMODULE GetNTDLL();
 
-public:
-	void operator >> (HWND hwnd);
+BOOLEAN IsFileExist(_In_ PCWSTR FileName);
 
-	ULONG Init(SIZE_T RegionSize);
+LONG InitLog(PCWSTR name, BOOL bUseFolder = FALSE);
 
-	~WLog()
-	{
-		if (_BaseAddress)
-		{
-			LocalFree(_BaseAddress);
-		}
-	}
+void DestroyLog();
 
-	WLog(WLog&&) = delete;
-	WLog(WLog&) = delete;
-	WLog(): _BaseAddress(0) {  }
+extern LONG _G_logMask;
 
-	operator PCWSTR()
-	{
-		return (PCWSTR)_BaseAddress;
-	}
+void LogOutputNT(_In_ LONG mask, _In_ PCWSTR format, ...);
 
-	WLog& operator ()(PCWSTR format, ...);
-};
+HRESULT I_LogError(WCHAR c, const void* prefix, HRESULT dwError = GetLastHresult());
 
-extern WLog _G_log;
+inline HRESULT LogError(PCSTR prefix, HRESULT dwError = GetLastHresult())
+{
+	return I_LogError('h', prefix, dwError);
+}
 
-#define DbgPrint(fmt, ...) _G_log(_CRT_WIDE(fmt), __VA_ARGS__ )
+inline HRESULT LogError(PCWSTR prefix, HRESULT dwError = GetLastHresult())
+{
+	return I_LogError('w', prefix, dwError);
+}
+
+#ifdef _NTIFS_
+
+#define DbgPrint(format, ...) LogOutputNT(~0, _CRT_WIDE(format), __VA_ARGS__ )
+
+#else
+
+#define DbgPrint(format, ...) NT::LogOutputNT(~0, _CRT_WIDE(format), __VA_ARGS__ )
+#define LogOutput(format, ...) NT::LogOutputNT(~0, format, __VA_ARGS__ )
+
+#define _NT_BEGIN namespace NT {
+#define _NT_END }
+
+#endif // _NTIFS_
+
+EXTERN_C extern IMAGE_DOS_HEADER __ImageBase;
+
+#pragma message("!!! NT::LOG >>>>>>")

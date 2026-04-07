@@ -24,9 +24,6 @@
     <ClCompile Include="file.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="https.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="install.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -54,6 +51,9 @@
     <ClCompile Include="H264.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="TUDP.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="stdafx.h">
@@ -63,9 +63,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="file.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="https.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="log.h">
@@ -87,6 +84,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="H264.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="TUDP.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="userendp.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

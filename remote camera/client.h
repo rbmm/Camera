@@ -4,34 +4,26 @@ NTSTATUS GetKeyCrc(BCRYPT_KEY_HANDLE hKey, PULONGLONG pcrc);
 
 #include "video.h"
 #include "H264.h"
-#include "https.h"
+#include "TUDP.h"
 
-class CClient : public CEncTcp, public H264
+class CClient : public Endpoint, public H264
 {
 	LONGLONG _crc = 0, _cbData;
 	HWND _hwnd, _hwndDlg;
 	VBmp* _vid = 0;
 	ULONG _biCompression, _biWidth, _biHeight;
 
-	virtual ~CClient();
+	virtual NTSTATUS Accept(PSOCKADDR_INET /*psi*/);
 
-	virtual ULONG GetConnectData(void** ppSendBuffer);
-
-	virtual BOOL OnConnect(ULONG dwError);
+	virtual NTSTATUS OnConnect();
 
 	virtual void OnDisconnect();
 
-	virtual BOOL OnUserData(ULONG type, PBYTE pb, ULONG cb);
+	virtual NTSTATUS OnUserData(ULONG type, PBYTE pb, ULONG cb);
 
-	virtual BOOL OnRecv(PSTR Buffer, ULONG cb);
+	virtual ~CClient();
 
 public:
-
-	NTSTATUS OpenKey(PCWSTR name);
-
-	CClient(HWND hwndDlg, HWND hwnd) : _hwnd(hwnd), _hwndDlg(hwndDlg)
-	{
-	}
 
 	ULONG GetFormats()
 	{
@@ -54,6 +46,16 @@ public:
 	}
 
 	BOOL Start(VBmp* vid, ULONG biCompression, ULONG i, ULONG j);
+
+	void OnStop()
+	{
+		DbgPrint("%hs<%p>\r\n", __FUNCTION__, this);
+		SendUserData('stop');
+	}
+
+	CClient(CClientServerR* parent, HWND hwndDlg, HWND hwnd) : Endpoint(parent), _hwnd(hwnd), _hwndDlg(hwndDlg)
+	{
+	}
 };
 
-BOOL StartClient(CClient** ppcln, HWND hwndDlg, HWND hwnd);
+BOOL CreateClient(CClient** ppcln, HWND hwndDlg, HWND hwnd);

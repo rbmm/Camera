@@ -69,4 +69,17 @@
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
+  <ItemGroup>
+    <Manifest Include=".manifest" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="camera.rc">
+      <Filter>Resource Files</Filter>
+    </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include=".rc2">
+      <Filter>Resource Files</Filter>
+    </None>
+  </ItemGroup>
 </Project>

@@ -63,19 +63,13 @@ void KsRead::IOCompletionRoutine(CDataPacket* , DWORD Code, NTSTATUS status, ULO
 	}
 }
 
-class CServer : public CEncTcp
-{
-public:
-	void OnStop();
-};
-
 KsRead::~KsRead()
 {
 	if (PVOID Data = _FrameData)
 	{
 		VirtualFree(Data, 0, MEM_RELEASE);
 	}
-	_pTarget->Stop();
+	_pTarget->Stop(!_bStoping);
 	_pTarget->Release();
 	DbgPrint("%hs<%p>\r\n", __FUNCTION__, this);
 }

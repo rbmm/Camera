@@ -909,11 +909,46 @@ public:
 	static void Unregister();
 };
 
-void TestCsq();
+int __cdecl fputs(const char* str, FILE*)
+{
+	if (IsDebuggerPresent())
+	{
+		ULONG_PTR params[] = { strlen(str), (ULONG_PTR)str };
+		RaiseException(DBG_PRINTEXCEPTION_C, 0, _countof(params), params);
+	}
+	return 0;
+}
+
+#undef DbgPrint
 
 void CALLBACK ep(void*)
 {
-	//TestCsq();
+	if (HMODULE hmod = GetModuleHandleW(L"x265.dll"))
+	{
+		ULONG s;
+		if (void** pIAT = (void**)RtlImageDirectoryEntryToData(hmod, TRUE, IMAGE_DIRECTORY_ENTRY_IAT, &s))
+		{
+			if (s /= sizeof(PVOID))
+			{
+				if (PVOID pv = GetProcAddress(GetModuleHandleW(L"ucrtbase.dll"), "fputs"))
+				{
+					do
+					{
+						if (pv == *pIAT)
+						{
+							if (VirtualProtect(pIAT, sizeof(PVOID), PAGE_READWRITE, &s))
+							{
+								*pIAT = fputs;
+								VirtualProtect(pIAT, sizeof(PVOID), s, &s);
+							}
+							break;
+						}
+					} while (pIAT++, --s);
+				}
+			}
+		}
+	}
+
 	initterm();
 	if (YCameraWnd::Register())
 	{
